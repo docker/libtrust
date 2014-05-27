@@ -28,6 +28,8 @@ const (
 
 type Action int
 
+// Actions map to Beam commands.
+// FIXME: move this to Beam and import it from there.
 const (
 	LS Action = iota
 	CD
@@ -39,4 +41,8 @@ const (
 	START
 	RM
 	REGISTER
+	AUTHORIZE
+	DELEGATE
+	PULL
+	PUSH
 )
