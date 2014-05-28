@@ -2,9 +2,10 @@ package libtrust
 
 import (
 	"crypto"
-	"crypto/rsa"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha512"
+	"crypto/x509"
 	"io"
 )
 
@@ -22,7 +23,7 @@ func NewId() (Id, error) {
 }
 
 type RsaId struct {
-	k	*rsa.PrivateKey
+	k *rsa.PrivateKey
 }
 
 func (id *RsaId) String() string {
@@ -38,3 +39,14 @@ func (id *RsaId) Sign(src io.Reader) ([]byte, error) {
 	return rsa.SignPKCS1v15(rand.Reader, id.k, crypto.SHA512, h.Sum(nil))
 }
 
+func (id *RsaId) Export() []byte {
+	return x509.MarshalPKCS1PrivateKey(id.k)
+}
+
+func ImportId(data []byte) (*RsaId, error) {
+	k, err := x509.ParsePKCS1PrivateKey(data)
+	if err != nil {
+		return nil, err
+	}
+	return &RsaId{k}, nil
+}
