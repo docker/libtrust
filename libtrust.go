@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha512"
 	"crypto/x509"
+	"encoding/base64"
 	"io"
 )
 
@@ -39,11 +40,17 @@ func (id *RsaId) Sign(src io.Reader) ([]byte, error) {
 	return rsa.SignPKCS1v15(rand.Reader, id.k, crypto.SHA512, h.Sum(nil))
 }
 
-func (id *RsaId) Export() []byte {
-	return x509.MarshalPKCS1PrivateKey(id.k)
+func (id *RsaId) Export() string {
+	bin := x509.MarshalPKCS1PrivateKey(id.k)
+	return base64.StdEncoding.EncodeToString(bin)
 }
 
-func ImportId(data []byte) (*RsaId, error) {
+func ImportId(b64 string) (*RsaId, error) {
+
+	data, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return nil, err
+	}
 	k, err := x509.ParsePKCS1PrivateKey(data)
 	if err != nil {
 		return nil, err
