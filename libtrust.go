@@ -14,7 +14,7 @@ type Id interface {
 	Sign(io.Reader) ([]byte, error)
 }
 
-func NewId() (Id, error) {
+func NewId() (*RsaId, error) {
 	k, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		return nil, err
