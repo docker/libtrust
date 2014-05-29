@@ -13,6 +13,7 @@ import (
 type Id interface {
 	String() string
 	Sign(io.Reader) ([]byte, error)
+	Keys() (crypto.PublicKey, crypto.PrivateKey)
 }
 
 func NewId() (*RsaId, error) {
@@ -43,6 +44,10 @@ func (id *RsaId) Sign(src io.Reader) ([]byte, error) {
 func (id *RsaId) Export() string {
 	bin := x509.MarshalPKCS1PrivateKey(id.k)
 	return base64.StdEncoding.EncodeToString(bin)
+}
+
+func (id *RsaId) Keys() (crypto.PublicKey, crypto.PrivateKey) {
+	return &id.k.PublicKey, id.k
 }
 
 func ImportId(b64 string) (*RsaId, error) {
