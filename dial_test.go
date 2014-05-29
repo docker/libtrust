@@ -51,9 +51,13 @@ func TestDial(t *testing.T) {
 		t.Fatalf("Error creating dialer: %s", dialerErr)
 	}
 
-	_, connErr := dialer.Dial("tcp", server)
+	c, connErr := dialer.Dial("tcp", server)
 	if connErr != nil {
 		t.Fatalf("Error connecting to server: %s", connErr)
+	}
+
+	if c.Id() != id {
+		t.Fatalf("Mismatched identifiers")
 	}
 
 	var serverConn *tls.Conn
@@ -74,6 +78,10 @@ func TestDial(t *testing.T) {
 
 	close(errorChan)
 	wg.Wait()
+	closeErr := c.Close()
+	if closeErr != nil {
+		t.Fatalf("Error closing connection: %s", closeErr)
+	}
 }
 
 func BenchmarkCreateTrustedDialer(b *testing.B) {

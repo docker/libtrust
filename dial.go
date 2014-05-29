@@ -22,14 +22,19 @@ var RootCAs *x509.CertPool
 
 // Used to create a trusted connection to a server
 type TrustedDialer struct {
-	Id
+	id Id
 
 	tlsConfig *tls.Config
 }
 
+type TrustedConn struct {
+	conn *tls.Conn
+	id   Id
+}
+
 func NewTrustedDialer(id Id) (*TrustedDialer, error) {
 	d := new(TrustedDialer)
-	d.Id = id
+	d.id = id
 
 	template := x509.Certificate{
 		SerialNumber: new(big.Int).SetInt64(0),
@@ -73,8 +78,26 @@ func NewTrustedDialer(id Id) (*TrustedDialer, error) {
 	return d, nil
 }
 
-func (d *TrustedDialer) Dial(network, address string) (net.Conn, error) {
-	return tls.Dial(network, address, d.tlsConfig)
+func (d *TrustedDialer) Dial(network, address string) (*TrustedConn, error) {
+	tlsConn, tlsErr := tls.Dial(network, address, d.tlsConfig)
+	if tlsErr != nil {
+		return nil, tlsErr
+	}
+	return &TrustedConn{conn: tlsConn, id: d.id}, nil
+}
+
+// Implement net.Conn interface
+func (c *TrustedConn) Read(b []byte) (int, error)         { return c.conn.Read(b) }
+func (c *TrustedConn) Write(b []byte) (int, error)        { return c.conn.Write(b) }
+func (c *TrustedConn) Close() error                       { return c.conn.Close() }
+func (c *TrustedConn) LocalAddr() net.Addr                { return c.conn.LocalAddr() }
+func (c *TrustedConn) RemoteAddr() net.Addr               { return c.conn.RemoteAddr() }
+func (c *TrustedConn) SetDeadline(t time.Time) error      { return c.conn.SetDeadline(t) }
+func (c *TrustedConn) SetReadDeadline(t time.Time) error  { return c.conn.SetReadDeadline(t) }
+func (c *TrustedConn) SetWriteDeadline(t time.Time) error { return c.conn.SetWriteDeadline(t) }
+
+func (c *TrustedConn) Id() Id {
+	return c.id
 }
 
 type TrustedServer struct {
