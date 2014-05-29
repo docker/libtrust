@@ -11,6 +11,15 @@ import (
 	"testing"
 )
 
+func init() {
+	certPool, certPoolErr := getCertPool()
+	if certPoolErr != nil {
+		panic(certPoolErr)
+	}
+	RootCAs = certPool
+	InsecureTLS = false
+}
+
 func checkPublicKeyEquals(t *testing.T, actual, expected interface{}) {
 	actualPublicKey := actual.(*rsa.PublicKey)
 	expectedPublicKey := expected.(*rsa.PublicKey)
@@ -37,7 +46,6 @@ func TestDial(t *testing.T) {
 		t.Fatalf("Error creating id: %s", idErr)
 	}
 
-	InsecureTLS = true
 	dialer, dialerErr := NewTrustedDialer(id)
 	if dialerErr != nil {
 		t.Fatalf("Error creating dialer: %s", dialerErr)
@@ -82,6 +90,64 @@ func BenchmarkCreateTrustedDialer(b *testing.B) {
 	}
 }
 
+func TestServer(t *testing.T) {
+	tlsConfig, tlsErr := serverTlsConfig()
+	if tlsErr != nil {
+		t.Fatalf("Error creating server tls config: %s", tlsErr)
+	}
+	server := "localhost:6443"
+	ts := NewTrustedServer(tlsConfig)
+	listener, listenerErr := ts.Listen("tcp", server)
+	if listenerErr != nil {
+		t.Fatalf("Error creating listener: %s", listenerErr)
+	}
+
+	errorChan := make(chan error)
+	connChan := make(chan net.Conn)
+
+	id, clientErr := spawnClient(server, errorChan)
+	if clientErr != nil {
+		t.Fatalf("Error spawning client: %s", clientErr)
+	}
+
+	go func() {
+		c, connErr := listener.Accept()
+		if connErr != nil {
+			t.Logf("Error accepting connection: %s", connErr)
+			close(connChan)
+		} else {
+			connChan <- c
+		}
+
+	}()
+
+	var conn net.Conn
+	select {
+	case c, ok := <-connChan:
+		if !ok {
+			t.Fatalf("Unable to accept connection")
+		}
+		conn = c
+	case err := <-errorChan:
+		t.Fatalf("Error establishing connection: %s", err)
+	}
+
+	pubKey, authErr := ts.Authenticate(conn)
+	if authErr != nil {
+		t.Fatalf("Error authenticating connection: %s", authErr)
+	}
+
+	expectedPubKey, _ := id.Keys()
+	checkPublicKeyEquals(t, pubKey, expectedPubKey)
+
+	closeErr := listener.Close()
+	if closeErr != nil {
+		t.Fatalf("Error closing listener: %s", closeErr)
+	}
+	close(connChan)
+	close(errorChan)
+}
+
 func getCertPool() (*x509.CertPool, error) {
 	CertPool := x509.NewCertPool()
 	caBytes, readErr := ioutil.ReadFile("./testcerts/ca.pem")
@@ -107,10 +173,9 @@ func serverTlsConfig() (*tls.Config, error) {
 		return nil, certPoolErr
 	}
 	config := tls.Config{
-		RootCAs:            certPool,
-		InsecureSkipVerify: true,
-		Certificates:       []tls.Certificate{cert},
-		ClientAuth:         tls.RequireAnyClientCert,
+		RootCAs:      certPool,
+		Certificates: []tls.Certificate{cert},
+		ClientAuth:   tls.RequireAnyClientCert,
 	}
 	return &config, nil
 }
@@ -157,4 +222,25 @@ func startServer(listen string, connChan chan *tls.Conn, errorChan chan error, w
 	}()
 
 	return nil
+}
+
+func spawnClient(server string, errChan chan error) (Id, error) {
+	id, idErr := NewId()
+	if idErr != nil {
+		return nil, idErr
+	}
+
+	dialer, dialerErr := NewTrustedDialer(id)
+	if dialerErr != nil {
+		return nil, dialerErr
+	}
+
+	go func() {
+		_, dialErr := dialer.Dial("tcp", server)
+		if dialErr != nil {
+			errChan <- dialErr
+		}
+	}()
+
+	return id, nil
 }

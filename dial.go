@@ -1,6 +1,7 @@
 package libtrust
 
 import (
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -17,6 +18,7 @@ var ErrUnsupportedKeyType = errors.New("unsupported key type")
 
 // Whether tls will check the servers certificate against root CAs
 var InsecureTLS bool
+var RootCAs *x509.CertPool
 
 // Used to create a trusted connection to a server
 type TrustedDialer struct {
@@ -66,10 +68,52 @@ func NewTrustedDialer(id Id) (*TrustedDialer, error) {
 	d.tlsConfig = new(tls.Config)
 	d.tlsConfig.InsecureSkipVerify = InsecureTLS
 	d.tlsConfig.Certificates = []tls.Certificate{tlsCert}
+	d.tlsConfig.RootCAs = RootCAs
 
 	return d, nil
 }
 
 func (d *TrustedDialer) Dial(network, address string) (net.Conn, error) {
 	return tls.Dial(network, address, d.tlsConfig)
+}
+
+type TrustedServer struct {
+	tlsConfig *tls.Config
+}
+
+func NewTrustedServer(c *tls.Config) *TrustedServer {
+	return &TrustedServer{
+		tlsConfig: c,
+	}
+}
+
+func (ts *TrustedServer) Listen(network, address string) (net.Listener, error) {
+	listener, err := tls.Listen(network, address, ts.tlsConfig)
+	if err != nil {
+		return nil, err
+	}
+	return listener, nil
+}
+
+func (ts *TrustedServer) Authenticate(conn net.Conn) (crypto.PublicKey, error) {
+	var tlsConn *tls.Conn
+	switch c := conn.(type) {
+	case *tls.Conn:
+		tlsConn = c
+	default:
+		tlsConn = tls.Server(conn, ts.tlsConfig)
+	}
+
+	tlsErr := tlsConn.Handshake()
+	if tlsErr != nil {
+		return nil, tlsErr
+	}
+
+	if len(tlsConn.ConnectionState().PeerCertificates) == 0 {
+		return nil, errors.New("Missing peer certificate")
+	}
+
+	pubKey := tlsConn.ConnectionState().PeerCertificates[0].PublicKey
+
+	return pubKey, nil
 }
