@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"flag"
 	"log"
 	"math/big"
 	"net"
@@ -17,8 +16,6 @@ import (
 const RSABITS = 2048
 
 func main() {
-	flag.Parse()
-
 	priv, err := rsa.GenerateKey(rand.Reader, RSABITS)
 	if err != nil {
 		log.Fatalf("failed to generate private key: %s", err)
