@@ -1,6 +1,7 @@
 package libtrust
 
 import (
+	"crypto/rsa"
 	"fmt"
 	"os"
 	"testing"
@@ -30,6 +31,50 @@ func init() {
 	id2 = i2
 }
 
+func EqualPrivateKeys(k1, k2 *rsa.PrivateKey) bool {
+	if k1.PublicKey.N.Cmp(k2.PublicKey.N) != 0 {
+		return false
+	}
+	if k1.PublicKey.E != k2.PublicKey.E {
+		return false
+	}
+	if k1.D.Cmp(k2.D) != 0 {
+		return false
+	}
+	if len(k1.Primes) != len(k2.Primes) {
+		return false
+	}
+	for i := range k1.Primes {
+		if k1.Primes[i].Cmp(k2.Primes[i]) != 0 {
+			return false
+		}
+	}
+	if k1.Precomputed.Dp.Cmp(k2.Precomputed.Dp) != 0 {
+		return false
+	}
+	if k1.Precomputed.Dq.Cmp(k2.Precomputed.Dq) != 0 {
+		return false
+	}
+	if k1.Precomputed.Qinv.Cmp(k2.Precomputed.Qinv) != 0 {
+		return false
+	}
+	if len(k1.Precomputed.CRTValues) != len(k2.Precomputed.CRTValues) {
+		return false
+	}
+	for i := range k1.Precomputed.CRTValues {
+		if k1.Precomputed.CRTValues[i].Exp.Cmp(k2.Precomputed.CRTValues[i].Exp) != 0 {
+			return false
+		}
+		if k1.Precomputed.CRTValues[i].Coeff.Cmp(k2.Precomputed.CRTValues[i].Coeff) != 0 {
+			return false
+		}
+		if k1.Precomputed.CRTValues[i].R.Cmp(k2.Precomputed.CRTValues[i].R) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func TestExportImport(t *testing.T) {
 	data1 := id1.Export()
 	if data1 != key1 {
@@ -39,9 +84,20 @@ func TestExportImport(t *testing.T) {
 	if data2 != key2 {
 		t.Fatalf("%#v", data2)
 	}
-	_, err := ImportId(data1)
+
+	imported1, err := ImportId(data1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// FIXME: check that id and id1 are the same key
+	if !EqualPrivateKeys(id1.k, imported1.k) {
+		t.Fatalf("Keys for id1 do not match")
+	}
+
+	imported2, err := ImportId(data2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !EqualPrivateKeys(id2.k, imported2.k) {
+		t.Fatalf("Keys for id2 do not match")
+	}
 }
