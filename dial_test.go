@@ -183,7 +183,6 @@ func serverTlsConfig() (*tls.Config, error) {
 	config := tls.Config{
 		RootCAs:      certPool,
 		Certificates: []tls.Certificate{cert},
-		ClientAuth:   tls.RequireAnyClientCert,
 	}
 	return &config, nil
 }
@@ -195,6 +194,7 @@ func startServer(listen string, connChan chan *tls.Conn, errorChan chan error, w
 	}
 
 	tlsConfig, tlsErr := serverTlsConfig()
+	tlsConfig.ClientAuth = tls.RequireAnyClientCert
 	if tlsErr != nil {
 		return tlsErr
 	}

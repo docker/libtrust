@@ -105,8 +105,11 @@ type TrustedServer struct {
 }
 
 func NewTrustedServer(c *tls.Config) *TrustedServer {
+	tlsConfig := *c
+	tlsConfig.ClientAuth = tls.RequireAnyClientCert
+	tlsConfig.ClientCAs = nil
 	return &TrustedServer{
-		tlsConfig: c,
+		tlsConfig: &tlsConfig,
 	}
 }
 
