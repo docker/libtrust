@@ -12,17 +12,17 @@ const (
 )
 
 var (
-	id1 *RsaId
-	id2 *RsaId
+	id1 *RsaID
+	id2 *RsaID
 )
 
 func init() {
 	fmt.Fprintf(os.Stderr, "Loading test keys...\n")
-	i1, err := ImportId(key1)
+	i1, err := ImportRsaID(key1)
 	if err != nil {
 		panic(err)
 	}
-	i2, err := ImportId(key2)
+	i2, err := ImportRsaID(key2)
 	if err != nil {
 		panic(err)
 	}
@@ -39,7 +39,7 @@ func TestExportImport(t *testing.T) {
 	if data2 != key2 {
 		t.Fatalf("%#v", data2)
 	}
-	_, err := ImportId(data1)
+	_, err := ImportRsaID(data1)
 	if err != nil {
 		t.Fatal(err)
 	}

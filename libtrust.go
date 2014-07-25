@@ -1,59 +1,27 @@
 package libtrust
 
 import (
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha512"
-	"crypto/x509"
-	"encoding/base64"
 	"io"
 )
 
-type Id interface {
+// ID represents an keypair identity.  Fellow trust agents and servers
+// will delegate responsibilities to a single ID.
+type ID interface {
+	// String returns a unique representation of the id
 	String() string
+
+	// Signs signs the content using the id.  If this id has
+	// no private key specified, this will return an
+	// error.
 	Sign(io.Reader) ([]byte, error)
-}
 
-func NewId() (*RsaId, error) {
-	k, err := rsa.GenerateKey(rand.Reader, 4096)
-	if err != nil {
-		return nil, err
-	}
-	return &RsaId{k}, nil
-}
+	// CanSign returns whether an ID object is capable of generating
+	// signatures, verifying signature is always possible.
+	CanSign() bool
 
-type RsaId struct {
-	k *rsa.PrivateKey
-}
+	// Verify verifies content using the id.
+	Verify(io.Reader, []byte) error
 
-func (id *RsaId) String() string {
-	// FIXME
-	return "public key as a string"
-}
-
-func (id *RsaId) Sign(src io.Reader) ([]byte, error) {
-	h := sha512.New()
-	if _, err := io.Copy(h, src); err != nil {
-		return nil, err
-	}
-	return rsa.SignPKCS1v15(rand.Reader, id.k, crypto.SHA512, h.Sum(nil))
-}
-
-func (id *RsaId) Export() string {
-	bin := x509.MarshalPKCS1PrivateKey(id.k)
-	return base64.StdEncoding.EncodeToString(bin)
-}
-
-func ImportId(b64 string) (*RsaId, error) {
-
-	data, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil {
-		return nil, err
-	}
-	k, err := x509.ParsePKCS1PrivateKey(data)
-	if err != nil {
-		return nil, err
-	}
-	return &RsaId{k}, nil
+	// Returns the public part of the ID as a JSON Web Key.
+	JSONWebKey() map[string]interface{}
 }
