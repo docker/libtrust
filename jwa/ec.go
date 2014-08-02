@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,34 +24,34 @@ type ecPublicKey struct {
 	signatureAlgorithm *signatureAlgorithm
 }
 
-// Kty returns the JWK key type for elliptic curve keys, i.e., "EC".
-func (k *ecPublicKey) Kty() string {
+// KeyType returns the JWK key type for elliptic curve keys, i.e., "EC".
+func (k *ecPublicKey) KeyType() string {
 	return "EC"
 }
 
 // Crv returns the JWK elliptic curve identifier.
 // Possible values are "P-256", "P-384", and "P-521".
-func (k *ecPublicKey) Crv() string {
+func (k *ecPublicKey) CurveName() string {
 	return k.curveName
 }
 
-// Kid returns a distinct identifier which is unique to this Public Key.
-func (k *ecPublicKey) Kid() string {
+// KeyID returns a distinct identifier which is unique to this Public Key.
+func (k *ecPublicKey) KeyID() string {
 	// Generate and return a 'libtrust' fingerprint of the EC public key.
 	// For an EC key this should be:
 	//   SHA256("EC"+curveName+bytes(X)+bytes(Y))
 	hasher := crypto.SHA256.New()
-	hasher.Write([]byte(k.Kty() + k.Crv()))
+	hasher.Write([]byte(k.KeyType() + k.CurveName()))
 	hasher.Write(k.X.Bytes())
 	hasher.Write(k.Y.Bytes())
-	return base64.URLEncoding.EncodeToString(hasher.Sum(nil))
+	return keyIDEncode(hasher.Sum(nil))
 }
 
 // Verify verifyies the signature of the data in the io.Reader using this Public Key.
 // The alg parameter should be the name of the JWA digital signature algorithm
 // which was used to produce the signature and should be supported by this
 // public key. Returns a nil error if the signature is valid.
-func (k *ecPublicKey) Verify(data io.Reader, alg, sigBase64Url string) error {
+func (k *ecPublicKey) Verify(data io.Reader, alg string, signature []byte) error {
 	// For EC keys there is only one supported signature algorithm depending
 	// on the curve parameters.
 	if k.signatureAlgorithm.HeaderParam() != alg {
@@ -60,11 +59,6 @@ func (k *ecPublicKey) Verify(data io.Reader, alg, sigBase64Url string) error {
 	}
 
 	// signature is the concatenation of (r, s), base64Url encoded.
-	signature, err := base64.URLEncoding.DecodeString(sigBase64Url)
-	if err != nil {
-		return fmt.Errorf("invalid base64 URL encoded signature: %s", err)
-	}
-
 	sigLength := len(signature)
 	expectedOctetLength := 2 * ((k.Params().BitSize + 7) >> 3)
 	if sigLength != expectedOctetLength {
@@ -76,7 +70,7 @@ func (k *ecPublicKey) Verify(data io.Reader, alg, sigBase64Url string) error {
 	s := new(big.Int).SetBytes(sBytes)
 
 	hasher := k.signatureAlgorithm.HashID().New()
-	_, err = io.Copy(hasher, data)
+	_, err := io.Copy(hasher, data)
 	if err != nil {
 		return fmt.Errorf("error reading data to sign: %s", err)
 	}
@@ -91,9 +85,9 @@ func (k *ecPublicKey) Verify(data io.Reader, alg, sigBase64Url string) error {
 
 func (k *ecPublicKey) toMap() map[string]interface{} {
 	jwk := make(map[string]interface{})
-	jwk["kty"] = k.Kty()
-	jwk["kid"] = k.Kid()
-	jwk["crv"] = k.Crv()
+	jwk["kty"] = k.KeyType()
+	jwk["kid"] = k.KeyID()
+	jwk["crv"] = k.CurveName()
 
 	xBytes := k.X.Bytes()
 	yBytes := k.Y.Bytes()
@@ -105,8 +99,8 @@ func (k *ecPublicKey) toMap() map[string]interface{} {
 	xBuf = append(xBuf, xBytes...)
 	yBuf = append(yBuf, yBytes...)
 
-	jwk["x"] = base64.URLEncoding.EncodeToString(xBuf)
-	jwk["y"] = base64.URLEncoding.EncodeToString(yBuf)
+	jwk["x"] = JoseBase64UrlEncode(xBuf)
+	jwk["y"] = JoseBase64UrlEncode(yBuf)
 
 	return jwk
 }
@@ -178,7 +172,7 @@ func ecPublicKeyFromMap(jwk map[string]interface{}) (*ecPublicKey, error) {
 		if err != nil {
 			return nil, fmt.Errorf("JWK EC Public Key ID: %s", err)
 		}
-		if kid != key.Kid() {
+		if kid != key.KeyID() {
 			return nil, fmt.Errorf("JWK EC Public Key ID does not match: %s", kid)
 		}
 	}
@@ -208,7 +202,7 @@ func (k *ecPrivateKey) PublicKey() PublicKey {
 // otherwise the the default hashing algorithm for this key is used. Returns
 // the signature and the name of the JWK signature algorithm used, e.g.,
 // "ES256", "ES384", "ES512".
-func (k *ecPrivateKey) Sign(data io.Reader, hashID crypto.Hash) (sigBase64Url, alg string, err error) {
+func (k *ecPrivateKey) Sign(data io.Reader, hashID crypto.Hash) (signature []byte, alg string, err error) {
 	// Generate a signature of the data using the internal alg.
 	// The given hashId is only a suggestion, and since EC keys only support
 	// on signature/hash algorithm given the curve name, we disregard it for
@@ -216,13 +210,13 @@ func (k *ecPrivateKey) Sign(data io.Reader, hashID crypto.Hash) (sigBase64Url, a
 	hasher := k.signatureAlgorithm.HashID().New()
 	_, err = io.Copy(hasher, data)
 	if err != nil {
-		return "", "", fmt.Errorf("error reading data to sign: %s", err)
+		return nil, "", fmt.Errorf("error reading data to sign: %s", err)
 	}
 	hash := hasher.Sum(nil)
 
 	r, s, err := ecdsa.Sign(rand.Reader, k.PrivateKey, hash)
 	if err != nil {
-		return "", "", fmt.Errorf("error producing signature: %s", err)
+		return nil, "", fmt.Errorf("error producing signature: %s", err)
 	}
 	rBytes, sBytes := r.Bytes(), s.Bytes()
 	octetLength := (k.ecPublicKey.Params().BitSize + 7) >> 3
@@ -233,11 +227,18 @@ func (k *ecPrivateKey) Sign(data io.Reader, hashID crypto.Hash) (sigBase64Url, a
 	rBuf = append(rBuf, rBytes...)
 	sBuf = append(sBuf, sBytes...)
 
-	signature := append(rBuf, sBuf...)
-	sigBase64Url = base64.URLEncoding.EncodeToString(signature)
+	signature = append(rBuf, sBuf...)
 	alg = k.signatureAlgorithm.HeaderParam()
 
 	return
+}
+
+// GeneratePEMCertKeyPair generates PEM encoded blocks of a self-signed certificate
+// and private key for use as an X509 key pair suitable for TLS.
+func (k *ecPrivateKey) GeneratePEMCertKeyPair() (cert, key []byte, err error) {
+	pub := k.ecPublicKey.PublicKey
+	priv := k.PrivateKey
+	return generatePEMCertKeyPair(pub, priv, k.KeyID())
 }
 
 func (k *ecPrivateKey) toMap() map[string]interface{} {
@@ -258,7 +259,7 @@ func (k *ecPrivateKey) toMap() map[string]interface{} {
 	dBuf := make([]byte, octetLength-len(dBytes), octetLength)
 	dBuf = append(dBuf, dBytes...)
 
-	jwk["d"] = base64.URLEncoding.EncodeToString(dBuf)
+	jwk["d"] = JoseBase64UrlEncode(dBuf)
 
 	return jwk
 }

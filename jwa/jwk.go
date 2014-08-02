@@ -9,9 +9,9 @@ import (
 
 // PublicKey is a generic interface for a JWK Public Key.
 type PublicKey interface {
-	Kty() string
-	Kid() string
-	Verify(data io.Reader, alg, sigBase64Url string) error
+	KeyType() string
+	KeyID() string
+	Verify(data io.Reader, alg string, signature []byte) error
 	json.Marshaler
 }
 
@@ -19,7 +19,8 @@ type PublicKey interface {
 type PrivateKey interface {
 	PublicKey
 	PublicKey() PublicKey
-	Sign(data io.Reader, hashID crypto.Hash) (sigBase64Url, alg string, err error)
+	Sign(data io.Reader, hashID crypto.Hash) (signature []byte, alg string, err error)
+	GeneratePEMCertKeyPair() (cert, key []byte, err error)
 }
 
 // UnmarshalPublicKeyJSON unmarshals the given JSON into a generic JWK Public Key

@@ -40,8 +40,8 @@ func generateRSATestKeys() (keys []PrivateKey, err error) {
 
 func TestRSAKeys(t *testing.T) {
 	for _, rsaKey := range rsaKeys {
-		if rsaKey.Kty() != "RSA" {
-			t.Fatalf("key type must be %q, instead got %q", "RSA", rsaKey.Kty())
+		if rsaKey.KeyType() != "RSA" {
+			t.Fatalf("key type must be %q, instead got %q", "RSA", rsaKey.KeyType())
 		}
 	}
 }
@@ -55,7 +55,7 @@ func TestRSASignVerify(t *testing.T) {
 	for i, rsaKey := range rsaKeys {
 		sigAlg := sigAlgs[i]
 
-		t.Logf("%s signature of %q with kid: %s\n", sigAlg.HeaderParam(), message, rsaKey.Kid())
+		t.Logf("%s signature of %q with kid: %s\n", sigAlg.HeaderParam(), message, rsaKey.KeyID())
 
 		data.Seek(0, 0) // Reset the byte reader
 
@@ -124,5 +124,16 @@ func TestMarshalUnmarshalRSAKeys(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestRSAGeneratePEMCertKeyPair(t *testing.T) {
+	for _, rsaKey := range rsaKeys {
+		certPEM, keyPEM, err := rsaKey.GeneratePEMCertKeyPair()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("Certificate:\n%s\n", string(certPEM))
+		t.Logf("Private Key:\n%s\n", string(keyPEM))
 	}
 }

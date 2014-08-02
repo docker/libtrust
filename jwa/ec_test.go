@@ -30,8 +30,8 @@ func TestECKeys(t *testing.T) {
 	ecKeys := generateECTestKeys(t)
 
 	for _, ecKey := range ecKeys {
-		if ecKey.Kty() != "EC" {
-			t.Fatalf("key type must be %q, instead got %q", "EC", ecKey.Kty())
+		if ecKey.KeyType() != "EC" {
+			t.Fatalf("key type must be %q, instead got %q", "EC", ecKey.KeyType())
 		}
 	}
 }
@@ -47,7 +47,7 @@ func TestECSignVerify(t *testing.T) {
 	for i, ecKey := range ecKeys {
 		sigAlg := sigAlgs[i]
 
-		t.Logf("%s signature of %q with kid: %s\n", sigAlg.HeaderParam(), message, ecKey.Kid())
+		t.Logf("%s signature of %q with kid: %s\n", sigAlg.HeaderParam(), message, ecKey.KeyType())
 
 		data.Seek(0, 0) // Reset the byte reader
 
@@ -109,5 +109,18 @@ func TestMarshalUnmarshalECKeys(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestECGeneratePEMCertKeyPair(t *testing.T) {
+	ecKeys := generateECTestKeys(t)
+
+	for _, ecKey := range ecKeys {
+		certPEM, keyPEM, err := ecKey.GeneratePEMCertKeyPair()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("Certificate:\n%s\n", string(certPEM))
+		t.Logf("Private Key:\n%s\n", string(keyPEM))
 	}
 }

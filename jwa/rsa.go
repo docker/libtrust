@@ -4,7 +4,6 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,37 +20,32 @@ type rsaPublicKey struct {
 	*rsa.PublicKey
 }
 
-// Kty returns the JWK key type for RSA keys, i.e., "RSA".
-func (k *rsaPublicKey) Kty() string {
+// KeyType returns the JWK key type for RSA keys, i.e., "RSA".
+func (k *rsaPublicKey) KeyType() string {
 	return "RSA"
 }
 
-// Kid returns a distinct identifier which is unique to this Public Key.
-func (k *rsaPublicKey) Kid() string {
+// KeyID returns a distinct identifier which is unique to this Public Key.
+func (k *rsaPublicKey) KeyID() string {
 	// Generate and return a 'libtrust' fingerprint of the RSA public key.
 	// For an RSA key this should be:
 	//   SHA256("RSA"+bytes(N)+bytes(E))
 	hasher := crypto.SHA256.New()
-	hasher.Write([]byte(k.Kty()))
+	hasher.Write([]byte(k.KeyType()))
 	hasher.Write(k.N.Bytes())
 	hasher.Write(serializeRSAPublicExponentParam(k.E))
-	return base64.URLEncoding.EncodeToString(hasher.Sum(nil))
+	return keyIDEncode(hasher.Sum(nil))
 }
 
 // Verify verifyies the signature of the data in the io.Reader using this Public Key.
 // The alg parameter should be the name of the JWA digital signature algorithm
 // which was used to produce the signature and should be supported by this
 // public key. Returns a nil error if the signature is valid.
-func (k *rsaPublicKey) Verify(data io.Reader, alg, sigBase64Url string) error {
+func (k *rsaPublicKey) Verify(data io.Reader, alg string, signature []byte) error {
 	// Verify the signature of the given date, return non-nil error if valid.
 	sigAlg, err := rsaSignatureAlgorithmByName(alg)
 	if err != nil {
 		return fmt.Errorf("unable to verify Signature: %s", err)
-	}
-
-	signature, err := base64.URLEncoding.DecodeString(sigBase64Url)
-	if err != nil {
-		return fmt.Errorf("invalid base64 URL encoded signature: %s", err)
 	}
 
 	hasher := sigAlg.HashID().New()
@@ -71,10 +65,10 @@ func (k *rsaPublicKey) Verify(data io.Reader, alg, sigBase64Url string) error {
 
 func (k *rsaPublicKey) toMap() map[string]interface{} {
 	jwk := make(map[string]interface{})
-	jwk["kty"] = k.Kty()
-	jwk["kid"] = k.Kid()
-	jwk["n"] = base64.URLEncoding.EncodeToString(k.N.Bytes())
-	jwk["e"] = base64.URLEncoding.EncodeToString(serializeRSAPublicExponentParam(k.E))
+	jwk["kty"] = k.KeyType()
+	jwk["kid"] = k.KeyID()
+	jwk["n"] = JoseBase64UrlEncode(k.N.Bytes())
+	jwk["e"] = JoseBase64UrlEncode(serializeRSAPublicExponentParam(k.E))
 
 	return jwk
 }
@@ -123,7 +117,7 @@ func rsaPublicKeyFromMap(jwk map[string]interface{}) (*rsaPublicKey, error) {
 		if err != nil {
 			return nil, fmt.Errorf("JWK RSA Public Key ID: %s", err)
 		}
-		if kid != key.Kid() {
+		if kid != key.KeyID() {
 			return nil, fmt.Errorf("JWK RSA Public Key ID does not match: %s", kid)
 		}
 	}
@@ -152,38 +146,45 @@ func (k *rsaPrivateKey) PublicKey() PublicKey {
 // the default hashing algorithm for this key is used. Returns the signature
 // and the name of the JWK signature algorithm used, e.g., "RS256", "RS384",
 // "RS512".
-func (k *rsaPrivateKey) Sign(data io.Reader, hashID crypto.Hash) (sigBase64Url, alg string, err error) {
+func (k *rsaPrivateKey) Sign(data io.Reader, hashID crypto.Hash) (signature []byte, alg string, err error) {
 	// Generate a signature of the data using the internal alg.
 	sigAlg := rsaPKCS1v15SignatureAlgorithmForHashID(hashID)
 	hasher := sigAlg.HashID().New()
 
 	_, err = io.Copy(hasher, data)
 	if err != nil {
-		return "", "", fmt.Errorf("error reading data to sign: %s", err)
+		return nil, "", fmt.Errorf("error reading data to sign: %s", err)
 	}
 	hash := hasher.Sum(nil)
 
-	signature, err := rsa.SignPKCS1v15(rand.Reader, k.PrivateKey, sigAlg.HashID(), hash)
+	signature, err = rsa.SignPKCS1v15(rand.Reader, k.PrivateKey, sigAlg.HashID(), hash)
 	if err != nil {
-		return "", "", fmt.Errorf("error producing signature: %s", err)
+		return nil, "", fmt.Errorf("error producing signature: %s", err)
 	}
 
-	sigBase64Url = base64.URLEncoding.EncodeToString(signature)
 	alg = sigAlg.HeaderParam()
 
 	return
+}
+
+// GeneratePEMCertKeyPair generates PEM encoded blocks of a self-signed certificate
+// and private key for use as an X509 key pair suitable for TLS.
+func (k *rsaPrivateKey) GeneratePEMCertKeyPair() (cert, key []byte, err error) {
+	pub := k.rsaPublicKey.PublicKey
+	priv := k.PrivateKey
+	return generatePEMCertKeyPair(pub, priv, k.KeyID())
 }
 
 func (k *rsaPrivateKey) toMap() map[string]interface{} {
 	k.Precompute() // Make sure the precomputed values are stored.
 	jwk := k.rsaPublicKey.toMap()
 
-	jwk["d"] = base64.URLEncoding.EncodeToString(k.D.Bytes())
-	jwk["p"] = base64.URLEncoding.EncodeToString(k.Primes[0].Bytes())
-	jwk["q"] = base64.URLEncoding.EncodeToString(k.Primes[1].Bytes())
-	jwk["dp"] = base64.URLEncoding.EncodeToString(k.Precomputed.Dp.Bytes())
-	jwk["dq"] = base64.URLEncoding.EncodeToString(k.Precomputed.Dq.Bytes())
-	jwk["qi"] = base64.URLEncoding.EncodeToString(k.Precomputed.Qinv.Bytes())
+	jwk["d"] = JoseBase64UrlEncode(k.D.Bytes())
+	jwk["p"] = JoseBase64UrlEncode(k.Primes[0].Bytes())
+	jwk["q"] = JoseBase64UrlEncode(k.Primes[1].Bytes())
+	jwk["dp"] = JoseBase64UrlEncode(k.Precomputed.Dp.Bytes())
+	jwk["dq"] = JoseBase64UrlEncode(k.Precomputed.Dq.Bytes())
+	jwk["qi"] = JoseBase64UrlEncode(k.Precomputed.Qinv.Bytes())
 
 	otherPrimes := k.Primes[2:]
 
@@ -191,10 +192,10 @@ func (k *rsaPrivateKey) toMap() map[string]interface{} {
 		otherPrimesInfo := make([]interface{}, len(otherPrimes))
 		for i, r := range otherPrimes {
 			otherPrimeInfo := make(map[string]string, 3)
-			otherPrimeInfo["r"] = base64.URLEncoding.EncodeToString(r.Bytes())
+			otherPrimeInfo["r"] = JoseBase64UrlEncode(r.Bytes())
 			crtVal := k.Precomputed.CRTValues[i]
-			otherPrimeInfo["d"] = base64.URLEncoding.EncodeToString(crtVal.Exp.Bytes())
-			otherPrimeInfo["t"] = base64.URLEncoding.EncodeToString(crtVal.Coeff.Bytes())
+			otherPrimeInfo["d"] = JoseBase64UrlEncode(crtVal.Exp.Bytes())
+			otherPrimeInfo["t"] = JoseBase64UrlEncode(crtVal.Coeff.Bytes())
 			otherPrimesInfo[i] = otherPrimeInfo
 		}
 		jwk["oth"] = otherPrimesInfo
