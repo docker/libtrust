@@ -128,12 +128,26 @@ func TestMarshalUnmarshalRSAKeys(t *testing.T) {
 }
 
 func TestRSAGeneratePEMCertKeyPair(t *testing.T) {
+	keyToSign, err := GenerateECP384PrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	for _, rsaKey := range rsaKeys {
-		certPEM, keyPEM, err := rsaKey.GeneratePEMCertKeyPair()
+		keyPEM, err := rsaKey.GeneratePEMKey()
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Logf("Certificate:\n%s\n", string(certPEM))
-		t.Logf("Private Key:\n%s\n", string(keyPEM))
+		selfSignedCertPEM, err := rsaKey.GeneratePEMCert(rsaKey.PublicKey())
+		if err != nil {
+			t.Fatal(err)
+		}
+		signedCertPEM, err := rsaKey.GeneratePEMCert(keyToSign.PublicKey())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("Private Key:\n%s", string(keyPEM))
+		t.Logf("Self-Signed Certificate:\n%s", string(selfSignedCertPEM))
+		t.Logf("Signature of %s Key:\n%s", keyToSign.KeyID(), string(signedCertPEM))
 	}
 }

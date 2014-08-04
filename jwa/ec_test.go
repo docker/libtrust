@@ -47,7 +47,7 @@ func TestECSignVerify(t *testing.T) {
 	for i, ecKey := range ecKeys {
 		sigAlg := sigAlgs[i]
 
-		t.Logf("%s signature of %q with kid: %s\n", sigAlg.HeaderParam(), message, ecKey.KeyType())
+		t.Logf("%s signature of %q with kid: %s\n", sigAlg.HeaderParam(), message, ecKey.KeyID())
 
 		data.Seek(0, 0) // Reset the byte reader
 
@@ -112,15 +112,29 @@ func TestMarshalUnmarshalECKeys(t *testing.T) {
 	}
 }
 
-func TestECGeneratePEMCertKeyPair(t *testing.T) {
+func TestECGeneratePEMCertKey(t *testing.T) {
 	ecKeys := generateECTestKeys(t)
 
+	keyToSign, err := GenerateECP384PrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	for _, ecKey := range ecKeys {
-		certPEM, keyPEM, err := ecKey.GeneratePEMCertKeyPair()
+		keyPEM, err := ecKey.GeneratePEMKey()
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Logf("Certificate:\n%s\n", string(certPEM))
-		t.Logf("Private Key:\n%s\n", string(keyPEM))
+		selfSignedCertPEM, err := ecKey.GeneratePEMCert(ecKey.PublicKey())
+		if err != nil {
+			t.Fatal(err)
+		}
+		signedCertPEM, err := ecKey.GeneratePEMCert(keyToSign.PublicKey())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("Private Key:\n%s", string(keyPEM))
+		t.Logf("Self-Signed Certificate:\n%s", string(selfSignedCertPEM))
+		t.Logf("Signature of %s Key:\n%s", keyToSign.KeyID(), string(signedCertPEM))
 	}
 }

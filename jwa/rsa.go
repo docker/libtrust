@@ -30,11 +30,13 @@ func (k *rsaPublicKey) KeyID() string {
 	// Generate and return a 'libtrust' fingerprint of the RSA public key.
 	// For an RSA key this should be:
 	//   SHA256("RSA"+bytes(N)+bytes(E))
+	// Then truncated to 240 bits and encoded into 12 base32 groups like so:
+	//   ABCD:EFGH:IJKL:MNOP:QRST:UVWX:YZ23:4567:ABCD:EFGH:IJKL:MNOP
 	hasher := crypto.SHA256.New()
 	hasher.Write([]byte(k.KeyType()))
 	hasher.Write(k.N.Bytes())
 	hasher.Write(serializeRSAPublicExponentParam(k.E))
-	return keyIDEncode(hasher.Sum(nil))
+	return keyIDEncode(hasher.Sum(nil)[:30])
 }
 
 // Verify verifyies the signature of the data in the io.Reader using this Public Key.
@@ -63,12 +65,19 @@ func (k *rsaPublicKey) Verify(data io.Reader, alg string, signature []byte) erro
 	return nil
 }
 
+// CryptoPublicKey returns the internal object which can be used as a
+// crypto.PublicKey for use with other standard library operations. The type
+// is either *rsa.PublicKey or *ecdsa.PublicKey
+func (k *rsaPublicKey) CryptoPublicKey() crypto.PublicKey {
+	return k.PublicKey
+}
+
 func (k *rsaPublicKey) toMap() map[string]interface{} {
 	jwk := make(map[string]interface{})
 	jwk["kty"] = k.KeyType()
 	jwk["kid"] = k.KeyID()
-	jwk["n"] = JoseBase64UrlEncode(k.N.Bytes())
-	jwk["e"] = JoseBase64UrlEncode(serializeRSAPublicExponentParam(k.E))
+	jwk["n"] = JOSEBase64UrlEncode(k.N.Bytes())
+	jwk["e"] = JOSEBase64UrlEncode(serializeRSAPublicExponentParam(k.E))
 
 	return jwk
 }
@@ -167,24 +176,36 @@ func (k *rsaPrivateKey) Sign(data io.Reader, hashID crypto.Hash) (signature []by
 	return
 }
 
-// GeneratePEMCertKeyPair generates PEM encoded blocks of a self-signed certificate
-// and private key for use as an X509 key pair suitable for TLS.
-func (k *rsaPrivateKey) GeneratePEMCertKeyPair() (cert, key []byte, err error) {
-	pub := k.rsaPublicKey.PublicKey
-	priv := k.PrivateKey
-	return generatePEMCertKeyPair(pub, priv, k.KeyID())
+// CryptoPrivateKey returns the internal object which can be used as a
+// crypto.PublicKey for use with other standard library operations. The type
+// is either *rsa.PublicKey or *ecdsa.PublicKey
+func (k *rsaPrivateKey) CryptoPrivateKey() crypto.PrivateKey {
+	return k.PrivateKey
+}
+
+// GeneratePEMKey generates a PEM encoded block of a the internal private key
+// for use as an X509 key pair suitable for TLS and other functions.
+func (k *rsaPrivateKey) GeneratePEMKey() (key []byte, err error) {
+	return generatePEMPrivateKey(k)
+}
+
+// GeneratePEMCert generates a PEM encoded block of a certificate with
+// this key as the issuer and the given public key as the subject. Using this
+// key as the argument generates a self-signed certificate.
+func (k *rsaPrivateKey) GeneratePEMCert(pub PublicKey) (cert []byte, err error) {
+	return generateKeyIDPEMCert(pub, k)
 }
 
 func (k *rsaPrivateKey) toMap() map[string]interface{} {
 	k.Precompute() // Make sure the precomputed values are stored.
 	jwk := k.rsaPublicKey.toMap()
 
-	jwk["d"] = JoseBase64UrlEncode(k.D.Bytes())
-	jwk["p"] = JoseBase64UrlEncode(k.Primes[0].Bytes())
-	jwk["q"] = JoseBase64UrlEncode(k.Primes[1].Bytes())
-	jwk["dp"] = JoseBase64UrlEncode(k.Precomputed.Dp.Bytes())
-	jwk["dq"] = JoseBase64UrlEncode(k.Precomputed.Dq.Bytes())
-	jwk["qi"] = JoseBase64UrlEncode(k.Precomputed.Qinv.Bytes())
+	jwk["d"] = JOSEBase64UrlEncode(k.D.Bytes())
+	jwk["p"] = JOSEBase64UrlEncode(k.Primes[0].Bytes())
+	jwk["q"] = JOSEBase64UrlEncode(k.Primes[1].Bytes())
+	jwk["dp"] = JOSEBase64UrlEncode(k.Precomputed.Dp.Bytes())
+	jwk["dq"] = JOSEBase64UrlEncode(k.Precomputed.Dq.Bytes())
+	jwk["qi"] = JOSEBase64UrlEncode(k.Precomputed.Qinv.Bytes())
 
 	otherPrimes := k.Primes[2:]
 
@@ -192,10 +213,10 @@ func (k *rsaPrivateKey) toMap() map[string]interface{} {
 		otherPrimesInfo := make([]interface{}, len(otherPrimes))
 		for i, r := range otherPrimes {
 			otherPrimeInfo := make(map[string]string, 3)
-			otherPrimeInfo["r"] = JoseBase64UrlEncode(r.Bytes())
+			otherPrimeInfo["r"] = JOSEBase64UrlEncode(r.Bytes())
 			crtVal := k.Precomputed.CRTValues[i]
-			otherPrimeInfo["d"] = JoseBase64UrlEncode(crtVal.Exp.Bytes())
-			otherPrimeInfo["t"] = JoseBase64UrlEncode(crtVal.Coeff.Bytes())
+			otherPrimeInfo["d"] = JOSEBase64UrlEncode(crtVal.Exp.Bytes())
+			otherPrimeInfo["t"] = JOSEBase64UrlEncode(crtVal.Coeff.Bytes())
 			otherPrimesInfo[i] = otherPrimeInfo
 		}
 		jwk["oth"] = otherPrimesInfo
