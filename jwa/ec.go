@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 )
 
 /*
@@ -258,8 +259,8 @@ func (k *ecPrivateKey) GeneratePEMKey() (key []byte, err error) {
 // GeneratePEMCert generates a PEM encoded block of a certificate with
 // this key as the issuer and the given public key as the subject. Using this
 // key as the argument generates a self-signed certificate.
-func (k *ecPrivateKey) GeneratePEMCert(pub PublicKey) (cert []byte, err error) {
-	return generateKeyIDPEMCert(pub, k)
+func (k *ecPrivateKey) GeneratePEMCert(pub PublicKey, domains []string, ipAddresses []net.IP) (cert []byte, err error) {
+	return generateKeyIDPEMCert(pub, k, domains, ipAddresses)
 }
 
 func (k *ecPrivateKey) toMap() map[string]interface{} {

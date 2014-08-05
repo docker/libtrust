@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 )
 
 // PublicKey is a generic interface for a JWK Public Key.
@@ -59,8 +60,10 @@ type PrivateKey interface {
 	// this key as the issuer and the given public key as the subject. Using
 	// this key as the argument generates a self-signed certificate. The CN
 	// field of the certificate's Distinguished Name will be the KeyID of
-	// the given PublicKey.
-	GeneratePEMCert(PublicKey) (cert []byte, err error)
+	// the given PublicKey. To make a certificate usable for a TLS server,
+	// specify the domains and/or ipAddresses for the server, otherwise these
+	// arguments can be nil.
+	GeneratePEMCert(pub PublicKey, domains []string, ipAddresses []net.IP) (cert []byte, err error)
 }
 
 // UnmarshalPublicKeyJSON unmarshals the given JSON into a generic JWK Public Key
