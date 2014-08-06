@@ -1,59 +1,53 @@
 package libtrust
 
 import (
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha512"
-	"crypto/x509"
-	"encoding/base64"
+	"errors"
 	"io"
 )
 
-type Id interface {
+type SignatureAlgorithm int
+
+const (
+	RSA256 = iota
+	RSA384
+	RSA512
+	EC256
+	EC384
+	EC512
+)
+
+var (
+	ErrUnsupportedAlgorithm = errors.New("Unsupported algorithm")
+)
+
+// Fingerprint is a secure fingerprint of a public key
+type Fingerprint [32]byte
+
+// PublicKey represents the public part of a key pair.
+type PublicKey interface {
+	// String returns a unique string representation of the key.
 	String() string
-	Sign(io.Reader) ([]byte, error)
+
+	// Fingerprint returns a secure fingerprint for the key.
+	Fingerprint() Fingerprint
+
+	// SupportedAlgorithms returns a list of algorithms supported
+	// by the key.
+	SupportedAlgorithms() []SignatureAlgorithm
+
+	// Verify verifies content using the id.
+	Verify(io.Reader, []byte, SignatureAlgorithm) error
 }
 
-func NewId() (*RsaId, error) {
-	k, err := rsa.GenerateKey(rand.Reader, 4096)
-	if err != nil {
-		return nil, err
-	}
-	return &RsaId{k}, nil
-}
+// Key represents a keypair identity.  Fellow trust agents and servers
+// will delegate responsibilities to a single Key.
+type Key interface {
+	PublicKey
 
-type RsaId struct {
-	k *rsa.PrivateKey
-}
+	// Sign signs the content using the key.
+	Sign(io.Reader, SignatureAlgorithm) ([]byte, error)
 
-func (id *RsaId) String() string {
-	// FIXME
-	return "public key as a string"
-}
-
-func (id *RsaId) Sign(src io.Reader) ([]byte, error) {
-	h := sha512.New()
-	if _, err := io.Copy(h, src); err != nil {
-		return nil, err
-	}
-	return rsa.SignPKCS1v15(rand.Reader, id.k, crypto.SHA512, h.Sum(nil))
-}
-
-func (id *RsaId) Export() string {
-	bin := x509.MarshalPKCS1PrivateKey(id.k)
-	return base64.StdEncoding.EncodeToString(bin)
-}
-
-func ImportId(b64 string) (*RsaId, error) {
-
-	data, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil {
-		return nil, err
-	}
-	k, err := x509.ParsePKCS1PrivateKey(data)
-	if err != nil {
-		return nil, err
-	}
-	return &RsaId{k}, nil
+	// GenerateX509KeyPair generates a new self-signed X509 certificate
+	// and private key using this KeyPair.
+	GenerateX509KeyPair() ([]byte, []byte, error)
 }
