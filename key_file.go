@@ -98,3 +98,25 @@ func SaveKeyFile(key Key, name string) error {
 	_, err = f.Write(buf)
 	return err
 }
+
+func SavePublicKey(key PublicKey, name string) error {
+	f, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var buf []byte
+	switch key.(type) {
+	case *jwaPublicKey:
+		buf, err = json.MarshalIndent(key, "", "   ")
+		if err != nil {
+			return err
+		}
+	default:
+		return ErrUnsupportKeyType
+	}
+
+	_, err = f.Write(buf)
+	return err
+}
