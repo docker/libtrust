@@ -18,21 +18,25 @@ func init() {
 }
 
 func generateRSATestKeys() (keys []PrivateKey, err error) {
+	log.Println("Generating RSA 2048-bit Test Key")
 	rsa2048Key, err := GenerateRSA2048PrivateKey()
 	if err != nil {
 		return
 	}
 
+	log.Println("Generating RSA 3072-bit Test Key")
 	rsa3072Key, err := GenerateRSA3072PrivateKey()
 	if err != nil {
 		return
 	}
 
+	log.Println("Generating RSA 4096-bit Test Key")
 	rsa4096Key, err := GenerateRSA4096PrivateKey()
 	if err != nil {
 		return
 	}
 
+	log.Println("Done generating RSA Test Keys!")
 	keys = []PrivateKey{rsa2048Key, rsa3072Key, rsa4096Key}
 
 	return
@@ -127,27 +131,27 @@ func TestMarshalUnmarshalRSAKeys(t *testing.T) {
 	}
 }
 
-func TestRSAGeneratePEMCertKeyPair(t *testing.T) {
-	keyToSign, err := GenerateECP384PrivateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-
+func TestFromCryptoRSAKeys(t *testing.T) {
 	for _, rsaKey := range rsaKeys {
-		keyPEM, err := rsaKey.GeneratePEMKey()
+		cryptoPrivateKey := rsaKey.CryptoPrivateKey()
+		cryptoPublicKey := rsaKey.CryptoPublicKey()
+
+		pubKey, err := FromCryptoPublicKey(cryptoPublicKey)
 		if err != nil {
 			t.Fatal(err)
 		}
-		selfSignedCertPEM, err := rsaKey.GeneratePEMCert(rsaKey.PublicKey())
+
+		if pubKey.KeyID() != rsaKey.KeyID() {
+			t.Fatal("public key key ID mismatch")
+		}
+
+		privKey, err := FromCryptoPrivateKey(cryptoPrivateKey)
 		if err != nil {
 			t.Fatal(err)
 		}
-		signedCertPEM, err := rsaKey.GeneratePEMCert(keyToSign.PublicKey())
-		if err != nil {
-			t.Fatal(err)
+
+		if privKey.KeyID() != rsaKey.KeyID() {
+			t.Fatal("public key key ID mismatch")
 		}
-		t.Logf("Private Key:\n%s", string(keyPEM))
-		t.Logf("Self-Signed Certificate:\n%s", string(selfSignedCertPEM))
-		t.Logf("Signature of %s Key:\n%s", keyToSign.KeyID(), string(signedCertPEM))
 	}
 }

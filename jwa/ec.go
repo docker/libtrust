@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"net"
 )
 
 /*
@@ -23,6 +22,21 @@ type ecPublicKey struct {
 	*ecdsa.PublicKey
 	curveName          string
 	signatureAlgorithm *signatureAlgorithm
+}
+
+func fromECPublicKey(cryptoPublicKey *ecdsa.PublicKey) (*ecPublicKey, error) {
+	curve := cryptoPublicKey.Curve
+
+	switch {
+	case curve == elliptic.P256():
+		return &ecPublicKey{cryptoPublicKey, "P-256", es256}, nil
+	case curve == elliptic.P384():
+		return &ecPublicKey{cryptoPublicKey, "P-384", es384}, nil
+	case curve == elliptic.P521():
+		return &ecPublicKey{cryptoPublicKey, "P-521", es512}, nil
+	default:
+		return nil, errors.New("unsupported elliptic curve")
+	}
 }
 
 // KeyType returns the JWK key type for elliptic curve keys, i.e., "EC".
@@ -201,6 +215,15 @@ type ecPrivateKey struct {
 	*ecdsa.PrivateKey
 }
 
+func fromECPrivateKey(cryptoPrivateKey *ecdsa.PrivateKey) (*ecPrivateKey, error) {
+	publicKey, err := fromECPublicKey(&cryptoPrivateKey.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ecPrivateKey{*publicKey, cryptoPrivateKey}, nil
+}
+
 // PublicKey returns the Public Key data associated with this Private Key.
 func (k *ecPrivateKey) PublicKey() PublicKey {
 	return &k.ecPublicKey
@@ -248,19 +271,6 @@ func (k *ecPrivateKey) Sign(data io.Reader, hashID crypto.Hash) (signature []byt
 // is either *rsa.PublicKey or *ecdsa.PublicKey
 func (k *ecPrivateKey) CryptoPrivateKey() crypto.PrivateKey {
 	return k.PrivateKey
-}
-
-// GeneratePEMKey generates a PEM encoded block of a the internal private key
-// for use as an X509 key pair suitable for TLS and other functions.
-func (k *ecPrivateKey) GeneratePEMKey() (key []byte, err error) {
-	return generatePEMPrivateKey(k)
-}
-
-// GeneratePEMCert generates a PEM encoded block of a certificate with
-// this key as the issuer and the given public key as the subject. Using this
-// key as the argument generates a self-signed certificate.
-func (k *ecPrivateKey) GeneratePEMCert(pub PublicKey, domains []string, ipAddresses []net.IP) (cert []byte, err error) {
-	return generateKeyIDPEMCert(pub, k, domains, ipAddresses)
 }
 
 func (k *ecPrivateKey) toMap() map[string]interface{} {

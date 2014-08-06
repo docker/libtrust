@@ -2,8 +2,7 @@ package main
 
 import (
 	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
+	"github.com/docker/libtrust"
 	"github.com/docker/libtrust/jwa"
 	"io/ioutil"
 	"log"
@@ -39,72 +38,47 @@ func main() {
 		log.Fatal(err)
 	}
 
-	selfSignedCertPEM, err := clientKey.GeneratePEMCert(clientKey.PublicKey(), nil, nil)
+	selfSignedClientCert, err := libtrust.GenerateSelfSignedClientCert(clientKey)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	selfSignedCertDER, _ := pem.Decode(selfSignedCertPEM)
-	if selfSignedCertDER == nil {
-		log.Fatal("unable to decode self-signed certificate PEM data")
-	}
-
-	signedServerCertPEM, err := clientKey.GeneratePEMCert(serverKey, nil, nil)
+	caPool, err := libtrust.GenerateCACertPool(clientKey, []jwa.PublicKey{serverKey})
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	tlsCert := tls.Certificate{
-		Certificate: [][]byte{selfSignedCertDER.Bytes},
-		PrivateKey:  clientKey.CryptoPrivateKey(),
-	}
-
-	serverCAs := x509.NewCertPool()
-	if !serverCAs.AppendCertsFromPEM(signedServerCertPEM) {
-		log.Fatalln("unable to add server CA cert")
-	}
-
-	tlsConfig := &tls.Config{
-		Certificates:       []tls.Certificate{tlsCert},
-		RootCAs:            serverCAs,
-		InsecureSkipVerify: false,
-	}
-
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
 	}
 
 	client := &http.Client{
-		Transport: transport,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				Certificates: []tls.Certificate{
+					tls.Certificate{
+						Certificate: [][]byte{selfSignedClientCert.Raw},
+						PrivateKey:  clientKey.CryptoPrivateKey(),
+						Leaf:        selfSignedClientCert,
+					},
+				},
+				RootCAs: caPool,
+			},
+		},
 	}
 
-	resp, err := client.Get("https://localhost:8888")
-	if err != nil {
-		log.Fatal(err)
+	var makeRequest = func(url string) {
+		resp, err := client.Get(url)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		log.Println(resp.Status)
+		log.Println(string(body))
 	}
 
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Println(resp.Status)
-	log.Println(string(body))
-
-	resp, err = client.Get("https://127.0.0.1:8888")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer resp.Body.Close()
-
-	body, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Println(resp.Status)
-	log.Println(string(body))
+	makeRequest("https://localhost:8888")
+	makeRequest("https://127.0.0.1:8888")
 }

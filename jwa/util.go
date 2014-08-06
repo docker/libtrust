@@ -2,22 +2,14 @@ package jwa
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"math/big"
-	"net"
 	"strings"
-	"time"
 )
 
 // JOSEBase64UrlEncode encodes the given data using the standard base64 url
@@ -163,66 +155,4 @@ func parseRSAPrivateKeyParamFromMap(m map[string]interface{}, key string) (*big.
 	}
 
 	return new(big.Int).SetBytes(paramBytes), nil
-}
-
-func generateKeyIDPEMCert(pub PublicKey, priv PrivateKey, domains []string, ipAddresses []net.IP) (certPEM []byte, err error) {
-	pubCertTemplate := generateKeyIDCertTemplate(pub, domains, ipAddresses)
-	privCertTemplate := generateKeyIDCertTemplate(priv.PublicKey(), nil, nil)
-
-	certDER, err := x509.CreateCertificate(
-		rand.Reader, pubCertTemplate, privCertTemplate,
-		pub.CryptoPublicKey(), priv.CryptoPrivateKey(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create certificate: %s\n", err)
-	}
-	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-
-	return
-}
-
-func generateKeyIDCertTemplate(pub PublicKey, domains []string, ipAddresses []net.IP) *x509.Certificate {
-	// Generate a certificate template which is valid from the past week to 10 years from now and can be
-	// used as a combination Certificate Authority, Client Certificate, and Server Certificate for the
-	// given domain names or IP addresses.
-	return &x509.Certificate{
-		SerialNumber: big.NewInt(0),
-		Subject: pkix.Name{
-			CommonName: pub.KeyID(),
-		},
-		NotBefore:             time.Now().Add(-time.Hour * 24 * 7),
-		NotAfter:              time.Now().Add(time.Hour * 24 * 365 * 10),
-		DNSNames:              domains,
-		IPAddresses:           ipAddresses,
-		BasicConstraintsValid: true,
-		IsCA:        true,
-		KeyUsage:    x509.KeyUsageCertSign,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-	}
-}
-
-func generatePEMPrivateKey(priv PrivateKey) ([]byte, error) {
-	var (
-		keyDer   []byte
-		pemLabel string
-		err      error
-	)
-
-	switch typedPriv := priv.CryptoPrivateKey().(type) {
-	case *rsa.PrivateKey:
-		keyDer = x509.MarshalPKCS1PrivateKey(typedPriv)
-		pemLabel = "RSA PRIVATE KEY"
-	case *ecdsa.PrivateKey:
-		keyDer, err = x509.MarshalECPrivateKey(typedPriv)
-		pemLabel = "EC PRIVATE KEY"
-	default:
-		err = fmt.Errorf("unsupported private key type: %T", typedPriv)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to create PEM private key: %s", err)
-	}
-
-	return pem.EncodeToMemory(&pem.Block{Type: pemLabel, Bytes: keyDer}), nil
-
 }

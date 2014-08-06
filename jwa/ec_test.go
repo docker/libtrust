@@ -26,7 +26,6 @@ func generateECTestKeys(t *testing.T) []PrivateKey {
 }
 
 func TestECKeys(t *testing.T) {
-
 	ecKeys := generateECTestKeys(t)
 
 	for _, ecKey := range ecKeys {
@@ -112,29 +111,29 @@ func TestMarshalUnmarshalECKeys(t *testing.T) {
 	}
 }
 
-func TestECGeneratePEMCertKey(t *testing.T) {
+func TestFromCryptoECKeys(t *testing.T) {
 	ecKeys := generateECTestKeys(t)
 
-	keyToSign, err := GenerateECP384PrivateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	for _, ecKey := range ecKeys {
-		keyPEM, err := ecKey.GeneratePEMKey()
+		cryptoPrivateKey := ecKey.CryptoPrivateKey()
+		cryptoPublicKey := ecKey.CryptoPublicKey()
+
+		pubKey, err := FromCryptoPublicKey(cryptoPublicKey)
 		if err != nil {
 			t.Fatal(err)
 		}
-		selfSignedCertPEM, err := ecKey.GeneratePEMCert(ecKey.PublicKey())
+
+		if pubKey.KeyID() != ecKey.KeyID() {
+			t.Fatal("public key key ID mismatch")
+		}
+
+		privKey, err := FromCryptoPrivateKey(cryptoPrivateKey)
 		if err != nil {
 			t.Fatal(err)
 		}
-		signedCertPEM, err := ecKey.GeneratePEMCert(keyToSign.PublicKey())
-		if err != nil {
-			t.Fatal(err)
+
+		if privKey.KeyID() != ecKey.KeyID() {
+			t.Fatal("public key key ID mismatch")
 		}
-		t.Logf("Private Key:\n%s", string(keyPEM))
-		t.Logf("Self-Signed Certificate:\n%s", string(selfSignedCertPEM))
-		t.Logf("Signature of %s Key:\n%s", keyToSign.KeyID(), string(signedCertPEM))
 	}
 }

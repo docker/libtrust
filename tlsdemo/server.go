@@ -2,9 +2,8 @@ package main
 
 import (
 	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
+	"github.com/docker/libtrust"
 	"github.com/docker/libtrust/jwa"
 	"html"
 	"log"
@@ -48,35 +47,28 @@ func main() {
 		log.Fatal(err)
 	}
 
-	selfSignedCertPEM, err := serverKey.GeneratePEMCert(serverKey.PublicKey(), []string{"localhost"}, []net.IP{net.ParseIP("127.0.0.1")})
+	selfSignedServerCert, err := libtrust.GenerateSelfSignedServerCert(
+		serverKey, []string{"localhost"}, []net.IP{net.ParseIP("127.0.0.1")},
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	selfSignedCertDER, _ := pem.Decode(selfSignedCertPEM)
-	if selfSignedCertDER == nil {
-		log.Fatal("unable to decode self-signed certificate PEM data")
-	}
-
-	signedClientCertPEM, err := serverKey.GeneratePEMCert(clientKey, nil, nil)
+	caPool, err := libtrust.GenerateCACertPool(serverKey, []jwa.PublicKey{clientKey})
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	tlsCert := tls.Certificate{
-		Certificate: [][]byte{selfSignedCertDER.Bytes},
-		PrivateKey:  serverKey.CryptoPrivateKey(),
-	}
-
-	clientCAs := x509.NewCertPool()
-	if !clientCAs.AppendCertsFromPEM(signedClientCertPEM) {
-		log.Fatalln("unable to add client CA cert")
 	}
 
 	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{tlsCert},
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		ClientCAs:    clientCAs,
+		Certificates: []tls.Certificate{
+			tls.Certificate{
+				Certificate: [][]byte{selfSignedServerCert.Raw},
+				PrivateKey:  serverKey.CryptoPrivateKey(),
+				Leaf:        selfSignedServerCert,
+			},
+		},
+		ClientAuth: tls.RequireAndVerifyClientCert,
+		ClientCAs:  caPool,
 	}
 
 	server := &http.Server{
