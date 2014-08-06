@@ -32,6 +32,7 @@ type jwaPublicKey struct {
 }
 
 type jwaKey struct {
+	jwaPublicKey
 	key jwa.PrivateKey
 }
 
@@ -54,29 +55,13 @@ func (k *jwaPublicKey) Verify(io.Reader, []byte, SignatureAlgorithm) error {
 	return errors.New("not implemented")
 }
 
-func (k *jwaKey) String() string {
-	return k.key.KeyID()
-}
-
-func (k *jwaKey) Fingerprint() Fingerprint {
-	var fingerprint Fingerprint
-	return fingerprint
-}
-
-func (k *jwaKey) SupportedAlgorithms() []SignatureAlgorithm {
-	// Get list of supported keys
-
-	return []SignatureAlgorithm{}
-}
-
-func (k *jwaKey) Verify(io.Reader, []byte, SignatureAlgorithm) error {
-	//k.key.Verify(data io.Reader, alg string, signature []byte) error
-	return errors.New("not implemented")
-}
-
 func (k *jwaKey) Sign(io.Reader, SignatureAlgorithm) ([]byte, error) {
 	//k.key.Sign(data io.Reader, hashID crypto.Hash) (signature []byte, alg string, err error)
 	return nil, errors.New("not implemented")
+}
+
+func (k *jwaKey) PublicKey() PublicKey {
+	return &k.jwaPublicKey
 }
 
 func (k *jwaKey) GenerateX509KeyPair() ([]byte, []byte, error) {
@@ -89,6 +74,10 @@ func (k *jwaKey) GenerateX509KeyPair() ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 	return cert, key, nil
+}
+
+func newJWAKey(key jwa.PrivateKey) *jwaKey {
+	return &jwaKey{jwaPublicKey: jwaPublicKey{key: key.PublicKey()}, key: key}
 }
 
 func GenerateJWAKey(alg SignatureAlgorithm) (Key, error) {
@@ -114,5 +103,5 @@ func GenerateJWAKey(alg SignatureAlgorithm) (Key, error) {
 		return nil, err
 	}
 
-	return &jwaKey{key: pk}, nil
+	return newJWAKey(pk), nil
 }

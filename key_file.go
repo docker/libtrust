@@ -47,18 +47,16 @@ func LoadKeyFile(name string, passphrase PassphraseCallback) (Key, error) {
 	}
 
 	if kf.KeyType == "jwk" || kf.KeyType == "" {
-		key := &jwaKey{}
-		key.key, err = jwa.UnmarshalPrivateKeyJSON(kf.Key)
+		pk, err := jwa.UnmarshalPrivateKeyJSON(kf.Key)
 		if err != nil {
 			return nil, err
 		}
 
-		return key, nil
+		return newJWAKey(pk), nil
 	} else if kf.KeyType == "jwe" {
-		key := &jwaKey{}
-		//key.key, err = jwa.UnmarshalEncryptedKeyJSON([]byte(kf.Key), passphrase(kf.KeyID))
+		//pk, err = jwa.UnmarshalEncryptedKeyJSON([]byte(kf.Key), passphrase(kf.KeyID))
 
-		return key, nil
+		return &jwaKey{}, nil
 	}
 
 	return nil, ErrUnsupportKeyType
