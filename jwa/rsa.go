@@ -43,6 +43,10 @@ func (k *rsaPublicKey) KeyID() string {
 	return keyIDEncode(hasher.Sum(nil)[:30])
 }
 
+func (k *rsaPublicKey) String() string {
+	return fmt.Sprintf("JWK Public RSA Key <%s>", k.KeyID())
+}
+
 // Verify verifyies the signature of the data in the io.Reader using this Public Key.
 // The alg parameter should be the name of the JWA digital signature algorithm
 // which was used to produce the signature and should be supported by this
@@ -158,6 +162,10 @@ func fromRSAPrivateKey(cryptoPrivateKey *rsa.PrivateKey) *rsaPrivateKey {
 // PublicKey returns the Public Key data associated with this Private Key.
 func (k *rsaPrivateKey) PublicKey() PublicKey {
 	return &k.rsaPublicKey
+}
+
+func (k *rsaPrivateKey) String() string {
+	return fmt.Sprintf("JWK Private RSA Key <%s>", k.KeyID())
 }
 
 // Sign signs the data read from the io.Reader using a signature algorithm supported
