@@ -47,18 +47,16 @@ func LoadKeyFile(name string, passphrase PassphraseCallback) (Key, error) {
 	}
 
 	if kf.KeyType == "jwk" || kf.KeyType == "" {
-		key := &jwaKey{}
-		key.key, err = jwa.UnmarshalPrivateKeyJSON(kf.Key)
+		pk, err := jwa.UnmarshalPrivateKeyJSON(kf.Key)
 		if err != nil {
 			return nil, err
 		}
 
-		return key, nil
+		return newJWAKey(pk), nil
 	} else if kf.KeyType == "jwe" {
-		key := &jwaKey{}
-		//key.key, err = jwa.UnmarshalEncryptedKeyJSON([]byte(kf.Key), passphrase(kf.KeyID))
+		//pk, err = jwa.UnmarshalEncryptedKeyJSON([]byte(kf.Key), passphrase(kf.KeyID))
 
-		return key, nil
+		return &jwaKey{}, nil
 	}
 
 	return nil, ErrUnsupportKeyType
@@ -97,6 +95,28 @@ func SaveKeyFile(key Key, name string) error {
 	if err != nil {
 		return err
 	}
+	_, err = f.Write(buf)
+	return err
+}
+
+func SavePublicKey(key PublicKey, name string) error {
+	f, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var buf []byte
+	switch key.(type) {
+	case *jwaPublicKey:
+		buf, err = json.MarshalIndent(key, "", "   ")
+		if err != nil {
+			return err
+		}
+	default:
+		return ErrUnsupportKeyType
+	}
+
 	_, err = f.Write(buf)
 	return err
 }

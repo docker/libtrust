@@ -23,14 +23,8 @@ var (
 // Fingerprint is a secure fingerprint of a public key
 type Fingerprint [32]byte
 
-// PublicKey represents the public part of a key pair.
-type PublicKey interface {
-	// String returns a unique string representation of the key.
-	String() string
-
-	// Fingerprint returns a secure fingerprint for the key.
-	Fingerprint() Fingerprint
-
+// Verifier represents a type capable of verifying content.
+type Verifier interface {
 	// SupportedAlgorithms returns a list of algorithms supported
 	// by the key.
 	SupportedAlgorithms() []SignatureAlgorithm
@@ -39,15 +33,38 @@ type PublicKey interface {
 	Verify(io.Reader, []byte, SignatureAlgorithm) error
 }
 
-// Key represents a keypair identity.  Fellow trust agents and servers
-// will delegate responsibilities to a single Key.
-type Key interface {
-	PublicKey
+// Signer represents a type capable of signing and verifying content.
+type Signer interface {
+	Verifier
 
 	// Sign signs the content using the key.
 	Sign(io.Reader, SignatureAlgorithm) ([]byte, error)
+}
 
-	// GenerateX509KeyPair generates a new self-signed X509 certificate
-	// and private key using this KeyPair.
-	GenerateX509KeyPair() ([]byte, []byte, error)
+// FingerPrinter represents a type capable of returning a
+// secure fingerprint and unique string
+type FingerPrinter interface {
+	// String returns a unique string representation of the key.
+	String() string
+
+	// Fingerprint returns a secure fingerprint for the key.
+	Fingerprint() Fingerprint
+}
+
+// PublicKey represents the public part of a key pair.
+type PublicKey interface {
+	Verifier
+
+	FingerPrinter
+}
+
+// Key represents a keypair identity.  Fellow trust agents and servers
+// will delegate responsibilities to a single Key.
+type Key interface {
+	Signer
+
+	FingerPrinter
+
+	// PublicKey returns the corresponding public part of this key.
+	PublicKey() PublicKey
 }
