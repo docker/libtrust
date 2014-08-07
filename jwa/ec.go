@@ -64,10 +64,6 @@ func (k *ecPublicKey) KeyID() string {
 	return keyIDEncode(hasher.Sum(nil)[:30])
 }
 
-func (k *ecPublicKey) String() string {
-	return fmt.Sprintf("JWK Public EC Key <%s>", k.KeyID())
-}
-
 // Verify verifyies the signature of the data in the io.Reader using this Public Key.
 // The alg parameter should be the name of the JWA digital signature algorithm
 // which was used to produce the signature and should be supported by this
@@ -231,10 +227,6 @@ func fromECPrivateKey(cryptoPrivateKey *ecdsa.PrivateKey) (*ecPrivateKey, error)
 // PublicKey returns the Public Key data associated with this Private Key.
 func (k *ecPrivateKey) PublicKey() PublicKey {
 	return &k.ecPublicKey
-}
-
-func (k *ecPrivateKey) String() string {
-	return fmt.Sprintf("JWK Private EC Key <%s>", k.KeyID())
 }
 
 // Sign signs the data read from the io.Reader using a signature algorithm supported

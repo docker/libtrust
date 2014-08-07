@@ -33,8 +33,6 @@ type PublicKey interface {
 	// JSON Web Keys. See section 6 of the IETF draft RFC for JOSE JSON Web
 	// Algorithms.
 	json.Marshaler
-	// The string representation of a key is its key type and ID.
-	String() string
 }
 
 // PrivateKey is a generic interface for a JWK Private Key.
@@ -56,8 +54,6 @@ type PrivateKey interface {
 	// crypto.PublicKey for use with other standard library operations. The
 	// type is either *rsa.PublicKey or *ecdsa.PublicKey
 	CryptoPrivateKey() crypto.PrivateKey
-	// The string representation of a key is its key type and ID.
-	String() string
 }
 
 // UnmarshalPublicKeyJSON unmarshals the given JSON into a generic JWK Public Key
