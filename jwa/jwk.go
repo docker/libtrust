@@ -2,10 +2,11 @@ package jwa
 
 import (
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 )
 
 // PublicKey is a generic interface for a JWK Public Key.
@@ -53,17 +54,6 @@ type PrivateKey interface {
 	// crypto.PublicKey for use with other standard library operations. The
 	// type is either *rsa.PublicKey or *ecdsa.PublicKey
 	CryptoPrivateKey() crypto.PrivateKey
-	// GeneratePEMKey generates a PEM encoded block of a the internal private
-	// key for use as an X509 key pair suitable for TLS and other functions.
-	GeneratePEMKey() (key []byte, err error)
-	// GeneratePEMCert generates a PEM encoded block of a certificate with
-	// this key as the issuer and the given public key as the subject. Using
-	// this key as the argument generates a self-signed certificate. The CN
-	// field of the certificate's Distinguished Name will be the KeyID of
-	// the given PublicKey. To make a certificate usable for a TLS server,
-	// specify the domains and/or ipAddresses for the server, otherwise these
-	// arguments can be nil.
-	GeneratePEMCert(pub PublicKey, domains []string, ipAddresses []net.IP) (cert []byte, err error)
 }
 
 // UnmarshalPublicKeyJSON unmarshals the given JSON into a generic JWK Public Key
@@ -125,5 +115,33 @@ func UnmarshalPrivateKeyJSON(data []byte) (PrivateKey, error) {
 		return nil, fmt.Errorf(
 			"JWK Private Key type not supported: %q\n", kty,
 		)
+	}
+}
+
+// FromCryptoPublicKey returns a JWA Public Key representation of the given
+// *ecdsa.PublicKey or *rsa.PublicKey. Returns a non-nil error when the given
+// key is of an unsupported type.
+func FromCryptoPublicKey(cryptoPublicKey crypto.PublicKey) (PublicKey, error) {
+	switch cryptoPublicKey := cryptoPublicKey.(type) {
+	case *ecdsa.PublicKey:
+		return fromECPublicKey(cryptoPublicKey)
+	case *rsa.PublicKey:
+		return fromRSAPublicKey(cryptoPublicKey), nil
+	default:
+		return nil, fmt.Errorf("public key type %T is not supported", cryptoPublicKey)
+	}
+}
+
+// FromCryptoPrivateKey returns a JWA Public Key representation of the given
+// *ecdsa.PrivateKey or *rsa.PrivateKey. Returns a non-nil error when the given
+// key is of an unsupported type.
+func FromCryptoPrivateKey(cryptoPrivateKey crypto.PrivateKey) (PrivateKey, error) {
+	switch cryptoPrivateKey := cryptoPrivateKey.(type) {
+	case *ecdsa.PrivateKey:
+		return fromECPrivateKey(cryptoPrivateKey)
+	case *rsa.PrivateKey:
+		return fromRSAPrivateKey(cryptoPrivateKey), nil
+	default:
+		return nil, fmt.Errorf("private key type %T is not supported", cryptoPrivateKey)
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"net"
 )
 
 /*
@@ -19,6 +18,10 @@ import (
 // rsaPublicKey implements a JWK Public Key using RSA digital signature algorithms.
 type rsaPublicKey struct {
 	*rsa.PublicKey
+}
+
+func fromRSAPublicKey(cryptoPublicKey *rsa.PublicKey) *rsaPublicKey {
+	return &rsaPublicKey{cryptoPublicKey}
 }
 
 // KeyType returns the JWK key type for RSA keys, i.e., "RSA".
@@ -145,6 +148,13 @@ type rsaPrivateKey struct {
 	*rsa.PrivateKey
 }
 
+func fromRSAPrivateKey(cryptoPrivateKey *rsa.PrivateKey) *rsaPrivateKey {
+	return &rsaPrivateKey{
+		*fromRSAPublicKey(&cryptoPrivateKey.PublicKey),
+		cryptoPrivateKey,
+	}
+}
+
 // PublicKey returns the Public Key data associated with this Private Key.
 func (k *rsaPrivateKey) PublicKey() PublicKey {
 	return &k.rsaPublicKey
@@ -182,19 +192,6 @@ func (k *rsaPrivateKey) Sign(data io.Reader, hashID crypto.Hash) (signature []by
 // is either *rsa.PublicKey or *ecdsa.PublicKey
 func (k *rsaPrivateKey) CryptoPrivateKey() crypto.PrivateKey {
 	return k.PrivateKey
-}
-
-// GeneratePEMKey generates a PEM encoded block of a the internal private key
-// for use as an X509 key pair suitable for TLS and other functions.
-func (k *rsaPrivateKey) GeneratePEMKey() (key []byte, err error) {
-	return generatePEMPrivateKey(k)
-}
-
-// GeneratePEMCert generates a PEM encoded block of a certificate with
-// this key as the issuer and the given public key as the subject. Using this
-// key as the argument generates a self-signed certificate.
-func (k *rsaPrivateKey) GeneratePEMCert(pub PublicKey, domains []string, ipAddresses []net.IP) (cert []byte, err error) {
-	return generateKeyIDPEMCert(pub, k, domains, ipAddresses)
 }
 
 func (k *rsaPrivateKey) toMap() map[string]interface{} {
