@@ -2,52 +2,53 @@ package main
 
 import (
 	"crypto/tls"
-	"github.com/docker/libtrust"
-	"github.com/docker/libtrust/jwa"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+
+	"github.com/docker/libtrust"
+	"github.com/docker/libtrust/jwa"
 )
 
 var (
-	clientPrivateKey = `{
-		"crv": "P-256",
-		"d": "aaK8tX-bxv6tj8ojkJmGswiFD2EQO_cMYeW852botKU",
-		"kid": "K3JX:4IYK:U3QW:ZE4D:BNAL:5D2W:VFXW:T2KA:DJUR:2EAL:R5PR:LWGR",
-		"kty": "EC",
-		"x": "G0d8ufy7Cxs_CzH8X_C_xXosIoC8W0MB9kH8qxEctjE",
-		"y": "9xA0qceWD04gIkXJHNu3rtv9SxV3Gomgwb8exnabnqk"
-	}`
-	serverPublicKey = `{
-		"crv": "P-256",
-		"kid": "KNJ2:XUL3:E2U7:3J65:4NPM:OR7Q:ABAO:SC7I:ES7R:LVIN:NJEL:ZGH7",
-		"kty": "EC",
-		"x": "KR5_NDro3hmvfurhdSTJwcpSu7K8jQJgClV7yrZylkg",
-		"y": "iUYO0jYTV44IzQSu64yPn9I2P99HbGJvRix0yoWca8w"
-	}`
+	serverAddress        = "localhost:8888"
+	privateKeyFilename   = "client_data/private_key.json"
+	trustedHostsFilename = "client_data/trusted_hosts.json"
 )
 
 func main() {
-	clientKey, err := jwa.UnmarshalPrivateKeyJSON([]byte(clientPrivateKey))
+	// Load Client Key.
+	clientKey, err := libtrust.LoadKeyFile(privateKeyFilename)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	serverKey, err := jwa.UnmarshalPublicKeyJSON([]byte(serverPublicKey))
-	if err != nil {
-		log.Fatal(err)
-	}
-
+	// Generate Client Certificate.
 	selfSignedClientCert, err := libtrust.GenerateSelfSignedClientCert(clientKey)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Load trusted host keys.
+	hostKeys, err := libtrust.LoadTrustedHostKeysFile(trustedHostsFilename)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Ensure the host we want to connect to is trusted!
+	serverKey, ok := hostKeys[serverAddress]
+	if !ok {
+		log.Fatalf("%q is not a known and trusted host", serverAddress)
+	}
+
+	// Generate a CA pool with the trusted host's key.
 	caPool, err := libtrust.GenerateCACertPool(clientKey, []jwa.PublicKey{serverKey})
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Create HTTP Client.
 	client := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
@@ -79,6 +80,6 @@ func main() {
 		log.Println(string(body))
 	}
 
-	makeRequest("https://localhost:8888")
-	makeRequest("https://127.0.0.1:8888")
+	// Make the request to the trusted server!
+	makeRequest(fmt.Sprintf("https://%s", serverAddress))
 }
