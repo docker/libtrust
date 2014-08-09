@@ -56,8 +56,6 @@ type PrivateKey interface {
 	// crypto.PublicKey for use with other standard library operations. The
 	// type is either *rsa.PublicKey or *ecdsa.PublicKey
 	CryptoPrivateKey() crypto.PrivateKey
-	// The string representation of a key is its key type and ID.
-	String() string
 }
 
 // UnmarshalPublicKeyJSON unmarshals the given JSON into a generic JWK Public Key

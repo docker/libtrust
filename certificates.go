@@ -5,10 +5,11 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
-	"github.com/docker/libtrust/jwa"
 	"math/big"
 	"net"
 	"time"
+
+	"github.com/docker/libtrust/jwa"
 )
 
 type certTemplateInfo struct {

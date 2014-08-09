@@ -1,33 +1,54 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"github.com/docker/libtrust/jwa"
 	"log"
+
+	"github.com/docker/libtrust"
+	"github.com/docker/libtrust/jwa"
 )
 
 func main() {
+	// Generate and save client key.
 	clientKey, err := jwa.GenerateECP256PrivateKey()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	err = libtrust.SaveKey("client_data/private_key.json", clientKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = libtrust.SavePublicKey("client_data/public_key.json", clientKey.PublicKey())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Generate and save server key.
 	serverKey, err := jwa.GenerateECP256PrivateKey()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	clientKeyJSON, err := json.MarshalIndent(clientKey, "", "    ")
+	err = libtrust.SaveKey("server_data/private_key.json", serverKey)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	serverKeyJSON, err := json.MarshalIndent(serverKey, "", "    ")
+	err = libtrust.SavePublicKey("server_data/public_key.json", serverKey.PublicKey())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Client Key: %s\n", clientKeyJSON)
-	fmt.Printf("Server Key: %s\n", serverKeyJSON)
+	// Generate Authorized Keys file for server.
+	err = libtrust.SaveTrustedClientKey("server_data/trusted_clients.json", "TLS Demo Client", clientKey.PublicKey())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Generate Known Host Keys file for client.
+	err = libtrust.SaveTrustedHostKey("client_data/trusted_hosts.json", "localhost:8888", serverKey.PublicKey())
+	if err != nil {
+		log.Fatal(err)
+	}
 }
