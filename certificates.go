@@ -101,7 +101,9 @@ func GenerateSelfSignedClientCert(key PrivateKey) (*x509.Certificate, error) {
 	return generateCert(key.PublicKey(), key, info, info)
 }
 
-func generateCACert(signer PrivateKey, trustedKey PublicKey) (*x509.Certificate, error) {
+// GenerateCACert creates a certificate which can be used as a trusted
+// certificate authority.
+func GenerateCACert(signer PrivateKey, trustedKey PublicKey) (*x509.Certificate, error) {
 	subjectInfo := &certTemplateInfo{
 		commonName: trustedKey.KeyID(),
 		isCA:       true,
@@ -120,7 +122,7 @@ func GenerateCACertPool(signer PrivateKey, trustedKeys []PublicKey) (*x509.CertP
 	certPool := x509.NewCertPool()
 
 	for _, trustedKey := range trustedKeys {
-		cert, err := generateCACert(signer, trustedKey)
+		cert, err := GenerateCACert(signer, trustedKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate CA certificate: %s", err)
 		}
