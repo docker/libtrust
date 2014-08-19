@@ -5,6 +5,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -73,7 +74,8 @@ func LoadPublicKeyFile(filename string) (PublicKey, error) {
 	return key, nil
 }
 
-// SaveKey does something.
+// SaveKey saves the given key to a file using the provided filename.
+// This process will overwrite any existing file at the provided location.
 func SaveKey(filename string, key PrivateKey) error {
 	var encodedKey []byte
 	var err error
@@ -101,7 +103,7 @@ func SaveKey(filename string, key PrivateKey) error {
 	return nil
 }
 
-// SavePublicKey does something.
+// SavePublicKey saves the given public key to the file.
 func SavePublicKey(filename string, key PublicKey) error {
 	var encodedKey []byte
 	var err error
@@ -129,161 +131,71 @@ func SavePublicKey(filename string, key PublicKey) error {
 	return nil
 }
 
-/*
-	Manage Trusted Host Keys in a JSON file.
-*/
-
-type trustedHostKeysEntry struct {
-	// A TCP address <hostname_or_ip:port>
-	Address      string          `json:"address"`
-	RawPublicKey json.RawMessage `json:"publicKey"`
+type jwkSet struct {
+	Keys []json.RawMessage `json:"keys"`
 }
 
-type trustedHostKeysFile struct {
-	TrustedHostKeys []trustedHostKeysEntry `json:"trustedHostKeys"`
-}
-
-func loadTrustedHostKeysFile(filename string) ([]trustedHostKeysEntry, error) {
-	contents, err := ioutil.ReadFile(filename)
-	if os.IsNotExist(err) {
-		return make([]trustedHostKeysEntry, 0), nil
-	} else if err != nil {
-		return nil, fmt.Errorf("unable to read trusted host keys file %s: %s", filename, err)
-	}
-
-	var rawContent trustedHostKeysFile
-
-	if len(contents) != 0 {
-		err = json.Unmarshal(contents, &rawContent)
-		if err != nil {
-			return nil, fmt.Errorf("unable to decode trusted host keys file: %s", err)
+func loadJsonKeySet(filename string) ([]json.RawMessage, error) {
+	var set jwkSet
+	f, err := os.Open(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrKeyFileDoesNotExist
 		}
-	} else {
-		rawContent = trustedHostKeysFile{TrustedHostKeys: make([]trustedHostKeysEntry, 0)}
+		return nil, err
+	}
+	defer f.Close()
+
+	decoder := json.NewDecoder(f)
+
+	err = decoder.Decode(&set)
+	if err != nil {
+		if err == io.EOF {
+			return nil, nil
+		}
+		return nil, err
 	}
 
-	return rawContent.TrustedHostKeys, nil
+	return set.Keys, nil
 }
 
-// LoadTrustedHostKeysFile opens the given file and loads the trusted host
-// entries.
-func LoadTrustedHostKeysFile(filename string) (map[string]PublicKey, error) {
-	rawEntries, err := loadTrustedHostKeysFile(filename)
+func loadJsonKeySetFile(filename string) ([]PublicKey, error) {
+	messages, err := loadJsonKeySet(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	hostKeyMapping := make(map[string]PublicKey, len(rawEntries))
-
-	for _, entry := range rawEntries {
-		decodedKey, err := UnmarshalPublicKeyJWK(entry.RawPublicKey)
+	keys := make([]PublicKey, len(messages))
+	for i, raw := range messages {
+		key, err := UnmarshalPublicKeyJWK(raw)
 		if err != nil {
-			return nil, fmt.Errorf("unable to decode trusted host key: %s", err)
+			return nil, err
 		}
-		hostKeyMapping[entry.Address] = decodedKey
+		keys[i] = key
 	}
 
-	return hostKeyMapping, nil
+	return keys, nil
 }
 
-// SaveTrustedHostKey opens the given file and adds an entry for the given address
-// and public key.
-func SaveTrustedHostKey(filename, hostAddress string, key PublicKey) error {
-	encodedKey, err := json.Marshal(key)
-	if err != nil {
-		return fmt.Errorf("unable to encode trusted host key: %s", err)
-	}
-
-	rawEntries, err := loadTrustedHostKeysFile(filename)
-	if err != nil {
-		return err
-	}
-
-	rawEntries = append(rawEntries, trustedHostKeysEntry{hostAddress, json.RawMessage(encodedKey)})
-	entriesWrapper := trustedHostKeysFile{rawEntries}
-
-	encodedEntries, err := json.MarshalIndent(entriesWrapper, "", "    ")
-	if err != nil {
-		return fmt.Errorf("unable to encode trusted host keys: %s", err)
-	}
-
-	err = ioutil.WriteFile(filename, encodedEntries, os.FileMode(0644))
-	if err != nil {
-		return fmt.Errorf("unable to write trusted host keys file %s: %s", filename, err)
-	}
-
-	return nil
+// LoadKeySetFile loads a key set
+func LoadKeySetFile(filename string) ([]PublicKey, error) {
+	return loadJsonKeySetFile(filename)
 }
 
-/*
-	Manage Trusted Client Keys in a JSON file.
-*/
-
-type trustedClientKeysEntry struct {
-	Comment      string          `json:"comment"`
-	RawPublicKey json.RawMessage `json:"publicKey"`
-}
-
-type trustedClientKeysFile struct {
-	TrustedClientKeys []trustedClientKeysEntry `json:"trustedClientKeys"`
-}
-
-func loadTrustedClientKeysFileRaw(filename string) ([]trustedClientKeysEntry, error) {
-	contents, err := ioutil.ReadFile(filename)
-	if os.IsNotExist(err) {
-		return nil, nil
-	} else if err != nil {
-		return nil, fmt.Errorf("unable to read trusted client keys file %s: %s", filename, err)
-	}
-
-	var rawContent trustedClientKeysFile
-
-	if len(contents) != 0 {
-		err = json.Unmarshal(contents, &rawContent)
-		if err != nil {
-			return nil, fmt.Errorf("unable to decode trusted client keys file: %s", err)
-		}
-	} else {
-		rawContent = trustedClientKeysFile{make([]trustedClientKeysEntry, 0)}
-	}
-
-	return rawContent.TrustedClientKeys, nil
-}
-
-// LoadTrustedClientKeysFile does something.
-func LoadTrustedClientKeysFile(filename string) ([]PublicKey, error) {
-	rawEntries, err := loadTrustedClientKeysFileRaw(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	keyEntries := make([]PublicKey, len(rawEntries))
-
-	for i, entry := range rawEntries {
-		key, err := UnmarshalPublicKeyJWK(entry.RawPublicKey)
-		if err != nil {
-			return nil, fmt.Errorf("unable to decode trusted client key: %s", err)
-		}
-		keyEntries[i] = key
-	}
-
-	return keyEntries, nil
-}
-
-// SaveTrustedClientKey does something.
-func SaveTrustedClientKey(filename, comment string, key PublicKey) error {
+// AddKeySetFile adds a key to a key set
+func AddKeySetFile(filename string, key PublicKey) error {
 	encodedKey, err := json.Marshal(key)
 	if err != nil {
 		return fmt.Errorf("unable to encode trusted client key: %s", err)
 	}
 
-	rawEntries, err := loadTrustedClientKeysFileRaw(filename)
-	if err != nil {
+	rawEntries, err := loadJsonKeySet(filename)
+	if err != nil && err != ErrKeyFileDoesNotExist {
 		return err
 	}
 
-	rawEntries = append(rawEntries, trustedClientKeysEntry{comment, json.RawMessage(encodedKey)})
-	entriesWrapper := trustedClientKeysFile{rawEntries}
+	rawEntries = append(rawEntries, json.RawMessage(encodedKey))
+	entriesWrapper := jwkSet{Keys: rawEntries}
 
 	encodedEntries, err := json.MarshalIndent(entriesWrapper, "", "    ")
 	if err != nil {

@@ -20,10 +20,11 @@ import (
 // rsaPublicKey implements a JWK Public Key using RSA digital signature algorithms.
 type rsaPublicKey struct {
 	*rsa.PublicKey
+	extended map[string]interface{}
 }
 
 func fromRSAPublicKey(cryptoPublicKey *rsa.PublicKey) *rsaPublicKey {
-	return &rsaPublicKey{cryptoPublicKey}
+	return &rsaPublicKey{cryptoPublicKey, map[string]interface{}{}}
 }
 
 // KeyType returns the JWK key type for RSA keys, i.e., "RSA".
@@ -84,6 +85,9 @@ func (k *rsaPublicKey) CryptoPublicKey() crypto.PublicKey {
 
 func (k *rsaPublicKey) toMap() map[string]interface{} {
 	jwk := make(map[string]interface{})
+	for k, v := range k.extended {
+		jwk[k] = v
+	}
 	jwk["kty"] = k.KeyType()
 	jwk["kid"] = k.KeyID()
 	jwk["n"] = joseBase64UrlEncode(k.N.Bytes())
@@ -104,7 +108,19 @@ func (k *rsaPublicKey) PEMBlock() (*pem.Block, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to serialize RSA PublicKey to DER-encoded PKIX format: %s", err)
 	}
-	return &pem.Block{Type: "PUBLIC KEY", Bytes: derBytes}, nil
+	return createPemBlock("PUBLIC KEY", derBytes, k.extended)
+}
+
+func (k *rsaPublicKey) AddExtendedField(field string, value interface{}) {
+	k.extended[field] = value
+}
+
+func (k *rsaPublicKey) GetExtendedField(field string) interface{} {
+	v, ok := k.extended[field]
+	if !ok {
+		return nil
+	}
+	return v
 }
 
 func rsaPublicKeyFromMap(jwk map[string]interface{}) (*rsaPublicKey, error) {
@@ -149,6 +165,12 @@ func rsaPublicKeyFromMap(jwk map[string]interface{}) (*rsaPublicKey, error) {
 			return nil, fmt.Errorf("JWK RSA Public Key ID does not match: %s", kid)
 		}
 	}
+
+	if _, ok := jwk["d"]; ok {
+		return nil, fmt.Errorf("JWK RSA Public Key cannot contain private exponent")
+	}
+
+	key.extended = jwk
 
 	return key, nil
 }
@@ -251,18 +273,10 @@ func (k *rsaPrivateKey) MarshalJSON() (data []byte, err error) {
 // PEMBlock serializes this Private Key to DER-encoded PKIX format.
 func (k *rsaPrivateKey) PEMBlock() (*pem.Block, error) {
 	derBytes := x509.MarshalPKCS1PrivateKey(k.PrivateKey)
-	return &pem.Block{Type: "RSA PRIVATE KEY", Bytes: derBytes}, nil
+	return createPemBlock("RSA PRIVATE KEY", derBytes, k.extended)
 }
 
 func rsaPrivateKeyFromMap(jwk map[string]interface{}) (*rsaPrivateKey, error) {
-	// JWK key type (kty) has already been determined to be "RSA".
-	// Need to extract the public key information, then extract the private
-	// key values.
-	publicKey, err := rsaPublicKeyFromMap(jwk)
-	if err != nil {
-		return nil, err
-	}
-
 	// The JWA spec for RSA Private Keys (draft rfc section 5.3.2) states that
 	// only the private key exponent 'd' is REQUIRED, the others are just for
 	// signature/decryption optimizations and SHOULD be included when the JWK
@@ -294,6 +308,20 @@ func rsaPrivateKeyFromMap(jwk map[string]interface{}) (*rsaPrivateKey, error) {
 		return nil, fmt.Errorf("JWK RSA Private Key CRT coefficient: %s", err)
 	}
 
+	var oth interface{}
+	if _, ok := jwk["oth"]; ok {
+		oth = jwk["oth"]
+		delete(jwk, "oth")
+	}
+
+	// JWK key type (kty) has already been determined to be "RSA".
+	// Need to extract the public key information, then extract the private
+	// key values.
+	publicKey, err := rsaPublicKeyFromMap(jwk)
+	if err != nil {
+		return nil, err
+	}
+
 	privateKey := &rsa.PrivateKey{
 		PublicKey: *publicKey.PublicKey,
 		D:         privateExponent,
@@ -305,9 +333,9 @@ func rsaPrivateKeyFromMap(jwk map[string]interface{}) (*rsaPrivateKey, error) {
 		},
 	}
 
-	if _, ok := jwk["oth"]; ok {
+	if oth != nil {
 		// Should be an array of more JSON objects.
-		otherPrimesInfo, ok := jwk["oth"].([]interface{})
+		otherPrimesInfo, ok := oth.([]interface{})
 		if !ok {
 			return nil, errors.New("JWK RSA Private Key: Invalid other primes info: must be an array")
 		}
@@ -370,6 +398,7 @@ func generateRSAPrivateKey(bits int) (k *rsaPrivateKey, err error) {
 	}
 
 	k.rsaPublicKey.PublicKey = &k.PrivateKey.PublicKey
+	k.extended = make(map[string]interface{})
 
 	return
 }

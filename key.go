@@ -40,6 +40,8 @@ type PublicKey interface {
 	PEMBlock() (*pem.Block, error)
 	// The string representation of a key is its key type and ID.
 	String() string
+	AddExtendedField(string, interface{})
+	GetExtendedField(string) interface{}
 }
 
 // PrivateKey is a generic interface for a Private Key.

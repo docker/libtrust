@@ -24,6 +24,7 @@ type ecPublicKey struct {
 	*ecdsa.PublicKey
 	curveName          string
 	signatureAlgorithm *signatureAlgorithm
+	extended           map[string]interface{}
 }
 
 func fromECPublicKey(cryptoPublicKey *ecdsa.PublicKey) (*ecPublicKey, error) {
@@ -31,11 +32,11 @@ func fromECPublicKey(cryptoPublicKey *ecdsa.PublicKey) (*ecPublicKey, error) {
 
 	switch {
 	case curve == elliptic.P256():
-		return &ecPublicKey{cryptoPublicKey, "P-256", es256}, nil
+		return &ecPublicKey{cryptoPublicKey, "P-256", es256, map[string]interface{}{}}, nil
 	case curve == elliptic.P384():
-		return &ecPublicKey{cryptoPublicKey, "P-384", es384}, nil
+		return &ecPublicKey{cryptoPublicKey, "P-384", es384, map[string]interface{}{}}, nil
 	case curve == elliptic.P521():
-		return &ecPublicKey{cryptoPublicKey, "P-521", es512}, nil
+		return &ecPublicKey{cryptoPublicKey, "P-521", es512, map[string]interface{}{}}, nil
 	default:
 		return nil, errors.New("unsupported elliptic curve")
 	}
@@ -115,6 +116,9 @@ func (k *ecPublicKey) CryptoPublicKey() crypto.PublicKey {
 
 func (k *ecPublicKey) toMap() map[string]interface{} {
 	jwk := make(map[string]interface{})
+	for k, v := range k.extended {
+		jwk[k] = v
+	}
 	jwk["kty"] = k.KeyType()
 	jwk["kid"] = k.KeyID()
 	jwk["crv"] = k.CurveName()
@@ -147,7 +151,19 @@ func (k *ecPublicKey) PEMBlock() (*pem.Block, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to serialize EC PublicKey to DER-encoded PKIX format: %s", err)
 	}
-	return &pem.Block{Type: "PUBLIC KEY", Bytes: derBytes}, nil
+	return createPemBlock("PUBLIC KEY", derBytes, k.extended)
+}
+
+func (k *ecPublicKey) AddExtendedField(field string, value interface{}) {
+	k.extended[field] = value
+}
+
+func (k *ecPublicKey) GetExtendedField(field string) interface{} {
+	v, ok := k.extended[field]
+	if !ok {
+		return nil
+	}
+	return v
 }
 
 func ecPublicKeyFromMap(jwk map[string]interface{}) (*ecPublicKey, error) {
@@ -215,6 +231,8 @@ func ecPublicKeyFromMap(jwk map[string]interface{}) (*ecPublicKey, error) {
 			return nil, fmt.Errorf("JWK EC Public Key ID does not match: %s", kid)
 		}
 	}
+
+	key.extended = jwk
 
 	return key, nil
 }
@@ -327,21 +345,21 @@ func (k *ecPrivateKey) PEMBlock() (*pem.Block, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to serialize EC PrivateKey to DER-encoded PKIX format: %s", err)
 	}
-	return &pem.Block{Type: "EC PRIVATE KEY", Bytes: derBytes}, nil
+	return createPemBlock("EC PRIVATE KEY", derBytes, k.extended)
 }
 
 func ecPrivateKeyFromMap(jwk map[string]interface{}) (*ecPrivateKey, error) {
+	dB64Url, err := stringFromMap(jwk, "d")
+	if err != nil {
+		return nil, fmt.Errorf("JWK EC Private Key: %s", err)
+	}
+
 	// JWK key type (kty) has already been determined to be "EC".
 	// Need to extract the public key information, then extract the private
 	// key value 'd'.
 	publicKey, err := ecPublicKeyFromMap(jwk)
 	if err != nil {
 		return nil, err
-	}
-
-	dB64Url, err := stringFromMap(jwk, "d")
-	if err != nil {
-		return nil, fmt.Errorf("JWK EC Private Key: %s", err)
 	}
 
 	d, err := parseECPrivateParam(dB64Url, publicKey.Curve)
@@ -372,6 +390,7 @@ func generateECPrivateKey(curve elliptic.Curve) (k *ecPrivateKey, err error) {
 	}
 
 	k.ecPublicKey.PublicKey = &k.PrivateKey.PublicKey
+	k.extended = make(map[string]interface{})
 
 	return
 }
