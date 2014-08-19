@@ -102,12 +102,13 @@ func TestTrustedHostKeysFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = SaveTrustedHostKey(trustedHostKeysFilename, hostAddress1, hostKey1.PublicKey())
+	hostKey1.AddExtendedField("hosts", []string{hostAddress1})
+	err = AddKeySetFile(trustedHostKeysFilename, hostKey1.PublicKey())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	trustedHostKeysMapping, err := LoadTrustedHostKeysFile(trustedHostKeysFilename)
+	trustedHostKeysMapping, err := LoadKeySetFile(trustedHostKeysFilename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,12 +124,13 @@ func TestTrustedHostKeysFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = SaveTrustedHostKey(trustedHostKeysFilename, hostAddress2, hostKey2.PublicKey())
+	hostKey2.AddExtendedField("hosts", hostAddress2)
+	err = AddKeySetFile(trustedHostKeysFilename, hostKey2.PublicKey())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	trustedHostKeysMapping, err = LoadTrustedHostKeysFile(trustedHostKeysFilename)
+	trustedHostKeysMapping, err = LoadKeySetFile(trustedHostKeysFilename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,12 +151,12 @@ func TestTrustedClientKeysFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = SaveTrustedClientKey(trustedClientKeysFilename, "Client Key #1", clientKey1.PublicKey())
+	err = AddKeySetFile(trustedClientKeysFilename, clientKey1.PublicKey())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	trustedClientKeys, err := LoadTrustedClientKeysFile(trustedClientKeysFilename)
+	trustedClientKeys, err := LoadKeySetFile(trustedClientKeysFilename)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,12 +170,12 @@ func TestTrustedClientKeysFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = SaveTrustedClientKey(trustedClientKeysFilename, "Client Key #2", clientKey2.PublicKey())
+	err = AddKeySetFile(trustedClientKeysFilename, clientKey2.PublicKey())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	trustedClientKeys, err = LoadTrustedClientKeysFile(trustedClientKeysFilename)
+	trustedClientKeys, err = LoadKeySetFile(trustedClientKeysFilename)
 	if err != nil {
 		t.Fatal(err)
 	}

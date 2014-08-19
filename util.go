@@ -6,6 +6,7 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"math/big"
@@ -60,6 +61,7 @@ func stringFromMap(m map[string]interface{}, key string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("%q value must be a string", key)
 	}
+	delete(m, key)
 
 	return str, nil
 }
@@ -155,4 +157,24 @@ func parseRSAPrivateKeyParamFromMap(m map[string]interface{}, key string) (*big.
 	}
 
 	return new(big.Int).SetBytes(paramBytes), nil
+}
+
+func createPemBlock(name string, derBytes []byte, headers map[string]interface{}) (*pem.Block, error) {
+	pemBlock := &pem.Block{Type: name, Bytes: derBytes, Headers: map[string]string{}}
+	for k, v := range headers {
+		switch val := v.(type) {
+		case string:
+			pemBlock.Headers[k] = val
+		case []string:
+			if k == "hosts" {
+				pemBlock.Headers[k] = strings.Join(val, ",")
+			} else {
+				// Return error, non-encodable type
+			}
+		default:
+			// Return error, non-encodable type
+		}
+	}
+
+	return pemBlock, nil
 }
