@@ -3,6 +3,7 @@ package libtrust
 import (
 	"bytes"
 	"crypto/elliptic"
+	"crypto/x509"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
@@ -177,4 +178,32 @@ func createPemBlock(name string, derBytes []byte, headers map[string]interface{}
 	}
 
 	return pemBlock, nil
+}
+
+func pubKeyFromPEMBlock(pemBlock *pem.Block) (PublicKey, error) {
+	cryptoPublicKey, err := x509.ParsePKIXPublicKey(pemBlock.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode Public Key PEM data: %s", err)
+	}
+
+	pubKey, err := FromCryptoPublicKey(cryptoPublicKey)
+	if err != nil {
+		return nil, err
+	}
+
+	addPEMHeadersToKey(pemBlock, pubKey)
+
+	return pubKey, nil
+}
+
+func addPEMHeadersToKey(pemBlock *pem.Block, pubKey PublicKey) {
+	for key, value := range pemBlock.Headers {
+		var safeVal interface{}
+		if key == "hosts" {
+			safeVal = strings.Split(value, ",")
+		} else {
+			safeVal = value
+		}
+		pubKey.AddExtendedField(key, safeVal)
+	}
 }

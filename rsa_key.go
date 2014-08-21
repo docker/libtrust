@@ -108,6 +108,7 @@ func (k *rsaPublicKey) PEMBlock() (*pem.Block, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to serialize RSA PublicKey to DER-encoded PKIX format: %s", err)
 	}
+	k.extended["keyID"] = k.KeyID()
 	return createPemBlock("PUBLIC KEY", derBytes, k.extended)
 }
 
@@ -273,6 +274,7 @@ func (k *rsaPrivateKey) MarshalJSON() (data []byte, err error) {
 // PEMBlock serializes this Private Key to DER-encoded PKIX format.
 func (k *rsaPrivateKey) PEMBlock() (*pem.Block, error) {
 	derBytes := x509.MarshalPKCS1PrivateKey(k.PrivateKey)
+	k.extended["keyID"] = k.KeyID()
 	return createPemBlock("RSA PRIVATE KEY", derBytes, k.extended)
 }
 

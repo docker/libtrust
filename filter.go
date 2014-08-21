@@ -4,41 +4,34 @@ import (
 	"path/filepath"
 )
 
+// FilterByHosts does something.
 func FilterByHosts(keys []PublicKey, host string, includeEmpty bool) ([]PublicKey, error) {
 	filtered := make([]PublicKey, 0, len(keys))
-	for i := range keys {
-		var hosts interface{}
-		switch k := keys[i].(type) {
-		case *ecPublicKey:
-			hosts = k.GetExtendedField("hosts")
-		case *rsaPublicKey:
-			hosts = k.GetExtendedField("hosts")
-		default:
-			continue
-		}
-		hostList, ok := hosts.([]interface{})
-		if !ok || (ok && len(hostList) == 0) {
+
+	for _, pubKey := range keys {
+		hosts, ok := pubKey.GetExtendedField("hosts").([]string)
+
+		if !ok || (ok && len(hosts) == 0) {
 			if includeEmpty {
-				filtered = append(filtered, keys[i])
+				filtered = append(filtered, pubKey)
 			}
 			continue
 		}
-		// Check if any hostList match pattern
-		for _, h := range hostList {
-			hString, ok := h.(string)
-			if !ok {
-				continue
+
+		// Check if any hosts match pattern
+		for _, hostPattern := range hosts {
+			match, err := filepath.Match(hostPattern, host)
+			if err != nil {
+				return nil, err
 			}
-			match, matchErr := filepath.Match(hString, host)
-			if matchErr != nil {
-				return nil, matchErr
-			}
+
 			if match {
-				filtered = append(filtered, keys[i])
+				filtered = append(filtered, pubKey)
 				continue
 			}
 		}
 
 	}
+
 	return filtered, nil
 }

@@ -4,14 +4,15 @@ import (
 	"encoding/pem"
 	"fmt"
 	"log"
+	"net"
 
 	"github.com/docker/libtrust"
 )
 
 var (
 	serverAddress            = "localhost:8888"
-	clientPrivateKeyFilename = "client_data/private_key.json"
-	trustedHostsFilename     = "client_data/trusted_hosts.json"
+	clientPrivateKeyFilename = "client_data/private_key.pem"
+	trustedHostsFilename     = "client_data/trusted_hosts.pem"
 )
 
 func main() {
@@ -36,13 +37,22 @@ func main() {
 	encodedCert := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
 	fmt.Printf("Client Cert:\n\n%s\n", string(encodedCert))
 
-	trustedServerKeys, err := libtrust.LoadTrustedHostKeysFile(trustedHostsFilename)
+	trustedServerKeys, err := libtrust.LoadKeySetFile(trustedHostsFilename)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	serverKey := trustedServerKeys[serverAddress]
-	caCert, err := libtrust.GenerateCACert(key, serverKey)
+	hostname, _, err := net.SplitHostPort(serverAddress)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	trustedServerKeys, err = libtrust.FilterByHosts(trustedServerKeys, hostname, false)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	caCert, err := libtrust.GenerateCACert(key, trustedServerKeys[0])
 	if err != nil {
 		log.Fatal(err)
 	}

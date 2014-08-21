@@ -103,12 +103,33 @@ func UnmarshalPublicKeyPEM(data []byte) (PublicKey, error) {
 		return nil, fmt.Errorf("unable to get PublicKey from PEM type: %s", pemBlock.Type)
 	}
 
-	cryptoPublicKey, err := x509.ParsePKIXPublicKey(pemBlock.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode Public Key PEM data: %s", err)
+	return pubKeyFromPEMBlock(pemBlock)
+}
+
+// UnmarshalPublicKeyPEMBundle parses the PEM encoded data as a bundle of
+// PEM blocks appended one after the other and returns a slice of PublicKey
+// objects that it finds.
+func UnmarshalPublicKeyPEMBundle(data []byte) ([]PublicKey, error) {
+	pubKeys := []PublicKey{}
+
+	for {
+		var pemBlock *pem.Block
+		pemBlock, data = pem.Decode(data)
+		if pemBlock == nil {
+			break
+		} else if pemBlock.Type != "PUBLIC KEY" {
+			return nil, fmt.Errorf("unable to get PublicKey from PEM type: %s", pemBlock.Type)
+		}
+
+		pubKey, err := pubKeyFromPEMBlock(pemBlock)
+		if err != nil {
+			return nil, err
+		}
+
+		pubKeys = append(pubKeys, pubKey)
 	}
 
-	return FromCryptoPublicKey(cryptoPublicKey)
+	return pubKeys, nil
 }
 
 // UnmarshalPrivateKeyPEM parses the PEM encoded data and returns a libtrust
@@ -119,22 +140,31 @@ func UnmarshalPrivateKeyPEM(data []byte) (PrivateKey, error) {
 		return nil, errors.New("unable to find PEM encoded data")
 	}
 
+	var key PrivateKey
+
 	switch {
 	case pemBlock.Type == "RSA PRIVATE KEY":
 		rsaPrivateKey, err := x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("unable to decode RSA Private Key PEM data: %s", err)
 		}
-		return fromRSAPrivateKey(rsaPrivateKey), nil
+		key = fromRSAPrivateKey(rsaPrivateKey)
 	case pemBlock.Type == "EC PRIVATE KEY":
 		ecPrivateKey, err := x509.ParseECPrivateKey(pemBlock.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("unable to decode EC Private Key PEM data: %s", err)
 		}
-		return fromECPrivateKey(ecPrivateKey)
+		key, err = fromECPrivateKey(ecPrivateKey)
+		if err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("unable to get PrivateKey from PEM type: %s", pemBlock.Type)
 	}
+
+	addPEMHeadersToKey(pemBlock, key.PublicKey())
+
+	return key, nil
 }
 
 // UnmarshalPublicKeyJWK unmarshals the given JSON Web Key into a generic
@@ -167,6 +197,27 @@ func UnmarshalPublicKeyJWK(data []byte) (PublicKey, error) {
 			"JWK Public Key type not supported: %q\n", kty,
 		)
 	}
+}
+
+// UnmarshalPublicKeyJWKSet parses the JSON encoded data as a JSON Web Key Set
+// and returns a slice of Public Key objects.
+func UnmarshalPublicKeyJWKSet(data []byte) ([]PublicKey, error) {
+	rawKeys, err := loadJSONKeySetRaw(data)
+	if err != nil {
+		return nil, err
+	}
+
+	pubKeys := make([]PublicKey, 0, len(rawKeys))
+
+	for _, rawKey := range rawKeys {
+		pubKey, err := UnmarshalPublicKeyJWK(rawKey)
+		if err != nil {
+			return nil, err
+		}
+		pubKeys = append(pubKeys, pubKey)
+	}
+
+	return pubKeys, nil
 }
 
 // UnmarshalPrivateKeyJWK unmarshals the given JSON Web Key into a generic

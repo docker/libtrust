@@ -13,8 +13,8 @@ import (
 
 var (
 	serverAddress             = "localhost:8888"
-	privateKeyFilename        = "server_data/private_key.json"
-	authorizedClientsFilename = "server_data/trusted_clients.json"
+	privateKeyFilename        = "server_data/private_key.pem"
+	authorizedClientsFilename = "server_data/trusted_clients.pem"
 )
 
 func requestHandler(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +40,7 @@ func main() {
 	}
 
 	// Load authorized client keys.
-	authorizedClients, err := libtrust.LoadTrustedClientKeysFile(authorizedClientsFilename)
+	authorizedClients, err := libtrust.LoadKeySetFile(authorizedClientsFilename)
 	if err != nil {
 		log.Fatal(err)
 	}
