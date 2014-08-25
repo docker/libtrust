@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/docker/libtrust"
@@ -12,8 +13,8 @@ import (
 
 var (
 	serverAddress        = "localhost:8888"
-	privateKeyFilename   = "client_data/private_key.json"
-	trustedHostsFilename = "client_data/trusted_hosts.json"
+	privateKeyFilename   = "client_data/private_key.pem"
+	trustedHostsFilename = "client_data/trusted_hosts.pem"
 )
 
 func main() {
@@ -30,19 +31,23 @@ func main() {
 	}
 
 	// Load trusted host keys.
-	hostKeys, err := libtrust.LoadTrustedHostKeysFile(trustedHostsFilename)
+	hostKeys, err := libtrust.LoadKeySetFile(trustedHostsFilename)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Ensure the host we want to connect to is trusted!
-	serverKey, ok := hostKeys[serverAddress]
-	if !ok {
-		log.Fatalf("%q is not a known and trusted host", serverAddress)
+	host, _, err := net.SplitHostPort(serverAddress)
+	if err != nil {
+		log.Fatal(err)
+	}
+	serverKeys, err := libtrust.FilterByHosts(hostKeys, host, false)
+	if err != nil {
+		log.Fatalf("%q is not a known and trusted host", host)
 	}
 
 	// Generate a CA pool with the trusted host's key.
-	caPool, err := libtrust.GenerateCACertPool(clientKey, []libtrust.PublicKey{serverKey})
+	caPool, err := libtrust.GenerateCACertPool(clientKey, serverKeys)
 	if err != nil {
 		log.Fatal(err)
 	}

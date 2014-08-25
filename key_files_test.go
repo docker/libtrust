@@ -25,6 +25,19 @@ func TestKeyFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	testKeyFiles(t, key)
+
+	key, err = GenerateRSA2048PrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testKeyFiles(t, key)
+}
+
+func testKeyFiles(t *testing.T, key PrivateKey) {
+	var err error
+
 	privateKeyFilename := makeTempFile(t, "private_key")
 	privateKeyFilenamePEM := privateKeyFilename + ".pem"
 	privateKeyFilenameJWK := privateKeyFilename + ".jwk"
@@ -95,7 +108,18 @@ func TestKeyFiles(t *testing.T) {
 
 func TestTrustedHostKeysFile(t *testing.T) {
 	trustedHostKeysFilename := makeTempFile(t, "trusted_host_keys")
+	trustedHostKeysFilenamePEM := trustedHostKeysFilename + ".pem"
+	trustedHostKeysFilenameJWK := trustedHostKeysFilename + ".json"
 
+	testTrustedHostKeysFile(t, trustedHostKeysFilenamePEM)
+	testTrustedHostKeysFile(t, trustedHostKeysFilenameJWK)
+
+	os.Remove(trustedHostKeysFilename)
+	os.Remove(trustedHostKeysFilenamePEM)
+	os.Remove(trustedHostKeysFilenameJWK)
+}
+
+func testTrustedHostKeysFile(t *testing.T, trustedHostKeysFilename string) {
 	hostAddress1 := "docker.example.com:2376"
 	hostKey1, err := GenerateECP256PrivateKey()
 	if err != nil {
@@ -119,7 +143,7 @@ func TestTrustedHostKeysFile(t *testing.T) {
 	}
 
 	hostAddress2 := "192.168.59.103:2376"
-	hostKey2, err := GenerateECP384PrivateKey()
+	hostKey2, err := GenerateRSA2048PrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,12 +164,22 @@ func TestTrustedHostKeysFile(t *testing.T) {
 		t.Logf("Host Key: %s\n\n", hostKey)
 	}
 
-	os.Remove(trustedHostKeysFilename)
 }
 
 func TestTrustedClientKeysFile(t *testing.T) {
 	trustedClientKeysFilename := makeTempFile(t, "trusted_client_keys")
+	trustedClientKeysFilenamePEM := trustedClientKeysFilename + ".pem"
+	trustedClientKeysFilenameJWK := trustedClientKeysFilename + ".json"
 
+	testTrustedClientKeysFile(t, trustedClientKeysFilenamePEM)
+	testTrustedClientKeysFile(t, trustedClientKeysFilenameJWK)
+
+	os.Remove(trustedClientKeysFilename)
+	os.Remove(trustedClientKeysFilenamePEM)
+	os.Remove(trustedClientKeysFilenameJWK)
+}
+
+func testTrustedClientKeysFile(t *testing.T, trustedClientKeysFilename string) {
 	clientKey1, err := GenerateECP256PrivateKey()
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +199,7 @@ func TestTrustedClientKeysFile(t *testing.T) {
 		t.Logf("Client Key: %s\n", clientKey)
 	}
 
-	clientKey2, err := GenerateECP384PrivateKey()
+	clientKey2, err := GenerateRSA2048PrivateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,6 +217,4 @@ func TestTrustedClientKeysFile(t *testing.T) {
 	for _, clientKey := range trustedClientKeys {
 		t.Logf("Client Key: %s\n", clientKey)
 	}
-
-	os.Remove(trustedClientKeysFilename)
 }

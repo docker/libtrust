@@ -137,3 +137,21 @@ func TestFromCryptoECKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestExtendedFields(t *testing.T) {
+	key, err := GenerateECP256PrivateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	key.AddExtendedField("test", "foobar")
+	val := key.GetExtendedField("test")
+
+	gotVal, ok := val.(string)
+	if !ok {
+		t.Fatalf("value is not a string")
+	} else if gotVal != val {
+		t.Fatalf("value %q is not equal to %q", gotVal, val)
+	}
+
+}
