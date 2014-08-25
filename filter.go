@@ -4,7 +4,9 @@ import (
 	"path/filepath"
 )
 
-// FilterByHosts does something.
+// FilterByHosts filters the list of PublicKeys to only those which contain a
+// 'hosts' pattern which matches the given host. If *includeEmpty* is true,
+// then keys which do not specify any hosts are also returned.
 func FilterByHosts(keys []PublicKey, host string, includeEmpty bool) ([]PublicKey, error) {
 	filtered := make([]PublicKey, 0, len(keys))
 
