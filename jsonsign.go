@@ -72,11 +72,7 @@ func (js *JSONSignature) protectedHeader() (string, error) {
 	return joseBase64UrlEncode(protectedBytes), nil
 }
 
-func (js *JSONSignature) signBytes() ([]byte, error) {
-	protectedHeader, err := js.protectedHeader()
-	if err != nil {
-		return nil, err
-	}
+func (js *JSONSignature) signBytes(protectedHeader string) ([]byte, error) {
 	buf := make([]byte, len(js.payload)+len(protectedHeader)+1)
 	copy(buf, protectedHeader)
 	buf[len(protectedHeader)] = '.'
@@ -86,7 +82,11 @@ func (js *JSONSignature) signBytes() ([]byte, error) {
 
 // Sign adds a signature using the given private key.
 func (js *JSONSignature) Sign(key PrivateKey) error {
-	signBytes, err := js.signBytes()
+	protected, err := js.protectedHeader()
+	if err != nil {
+		return err
+	}
+	signBytes, err := js.signBytes(protected)
 	if err != nil {
 		return err
 	}
@@ -98,10 +98,6 @@ func (js *JSONSignature) Sign(key PrivateKey) error {
 	header := &jsHeader{
 		JWK:       key.PublicKey(),
 		Algorithm: algorithm,
-	}
-	protected, err := js.protectedHeader()
-	if err != nil {
-		return err
 	}
 	sig := &jsSignature{
 		Header:    header,
@@ -123,7 +119,11 @@ func (js *JSONSignature) SignWithChain(key PrivateKey, chain []*x509.Certificate
 	//key.PublicKey().CryptoPublicKey()
 
 	// Verify chain
-	signBytes, err := js.signBytes()
+	protected, err := js.protectedHeader()
+	if err != nil {
+		return err
+	}
+	signBytes, err := js.signBytes(protected)
 	if err != nil {
 		return err
 	}
@@ -141,10 +141,6 @@ func (js *JSONSignature) SignWithChain(key PrivateKey, chain []*x509.Certificate
 		header.Chain[i] = base64.StdEncoding.EncodeToString(cert.Raw)
 	}
 
-	protected, err := js.protectedHeader()
-	if err != nil {
-		return err
-	}
 	sig := &jsSignature{
 		Header:    header,
 		Signature: joseBase64UrlEncode(sigBytes),
@@ -160,11 +156,11 @@ func (js *JSONSignature) SignWithChain(key PrivateKey, chain []*x509.Certificate
 // public keys used to sign. Any x509 chains are not checked.
 func (js *JSONSignature) Verify() ([]PublicKey, error) {
 	keys := make([]PublicKey, len(js.signatures))
-	signBytes, err := js.signBytes()
-	if err != nil {
-		return nil, err
-	}
 	for i, signature := range js.signatures {
+		signBytes, err := js.signBytes(signature.Protected)
+		if err != nil {
+			return nil, err
+		}
 		var publicKey PublicKey
 		if len(signature.Header.Chain) > 0 {
 			certBytes, err := base64.StdEncoding.DecodeString(signature.Header.Chain[0])
@@ -205,11 +201,11 @@ func (js *JSONSignature) Verify() ([]PublicKey, error) {
 // Signatures without an x509 chain are not checked.
 func (js *JSONSignature) VerifyChains(ca *x509.CertPool) ([][]*x509.Certificate, error) {
 	chains := make([][]*x509.Certificate, 0, len(js.signatures))
-	signBytes, err := js.signBytes()
-	if err != nil {
-		return nil, err
-	}
 	for _, signature := range js.signatures {
+		signBytes, err := js.signBytes(signature.Protected)
+		if err != nil {
+			return nil, err
+		}
 		var publicKey PublicKey
 		if len(signature.Header.Chain) > 0 {
 			certBytes, err := base64.StdEncoding.DecodeString(signature.Header.Chain[0])
@@ -441,7 +437,7 @@ func ParsePrettySignature(content []byte, signatureKey string) (*JSONSignature, 
 	var contentMap map[string]json.RawMessage
 	err := json.Unmarshal(content, &contentMap)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error unmarshalling content: %s", err)
 	}
 	sigMessage, ok := contentMap[signatureKey]
 	if !ok {
@@ -460,7 +456,7 @@ func ParsePrettySignature(content []byte, signatureKey string) (*JSONSignature, 
 	for i, signatureBlock := range signatureBlocks {
 		protectedBytes, err := joseBase64UrlDecode(signatureBlock.Protected)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("base64 decode error: %s", err)
 		}
 		var protectedHeader map[string]interface{}
 		err = json.Unmarshal(protectedBytes, &protectedHeader)
@@ -478,7 +474,7 @@ func ParsePrettySignature(content []byte, signatureKey string) (*JSONSignature, 
 		}
 		formatTail, err := joseBase64UrlDecode(encodedTail)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("base64 decode error on tail: %s", err)
 		}
 		if js.formatLength == 0 {
 			js.formatLength = formatLength
@@ -498,7 +494,7 @@ func ParsePrettySignature(content []byte, signatureKey string) (*JSONSignature, 
 		if signatureBlock.Header.JWK != nil {
 			publicKey, err := UnmarshalPublicKeyJWK([]byte(signatureBlock.Header.JWK))
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("error unmarshalling public key: %s", err)
 			}
 			header.JWK = publicKey
 		}
