@@ -507,7 +507,9 @@ func ParsePrettySignature(content []byte, signatureKey string) (*JSONSignature, 
 	if js.formatLength > len(content) {
 		return nil, errors.New("invalid format length")
 	}
-	formatted := append(content[:js.formatLength], js.formatTail...)
+	formatted := make([]byte, js.formatLength+len(js.formatTail))
+	copy(formatted, content[:js.formatLength])
+	copy(formatted[js.formatLength:], js.formatTail)
 	js.indent = detectJSONIndent(formatted)
 	js.payload = joseBase64UrlEncode(formatted)
 

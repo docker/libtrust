@@ -145,6 +145,13 @@ func TestFormattedJson(t *testing.T) {
 	if keys[0].KeyID() != key.KeyID() {
 		t.Fatalf("Unexpected public key returned")
 	}
+
+	var unmarshalled map[string]interface{}
+	err = json.Unmarshal(b, &unmarshalled)
+	if err != nil {
+		t.Fatalf("Could not unmarshall after parse: %s", err)
+	}
+
 }
 
 func TestFormattedFlatJson(t *testing.T) {
