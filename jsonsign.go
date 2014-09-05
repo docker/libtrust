@@ -18,6 +18,10 @@ var (
 
 	// ErrInvalidJSONContent is used when invalid json is encountered.
 	ErrInvalidJSONContent = errors.New("invalid json content")
+
+	// ErrMissingSignatureKey is used when the specified signature key
+	// does not exist in the JSON content.
+	ErrMissingSignatureKey = errors.New("missing signature key")
 )
 
 type jsHeader struct {
@@ -441,7 +445,7 @@ func ParsePrettySignature(content []byte, signatureKey string) (*JSONSignature, 
 	}
 	sigMessage, ok := contentMap[signatureKey]
 	if !ok {
-		return nil, errors.New("missing signatures")
+		return nil, ErrMissingSignatureKey
 	}
 
 	var signatureBlocks []jsParsedSignature
