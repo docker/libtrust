@@ -33,13 +33,13 @@ func TestFilter(t *testing.T) {
 			break
 		case i%2 == 0:
 			// Should catch keys 2, 4, and 6.
-			key.AddExtendedField("hosts", []string{"*.even.example.com"})
+			key.AddExtendedField("hosts", []interface{}{"*.even.example.com"})
 		case i == 7:
 			// Should catch only the last key, and make it match any hostname.
-			key.AddExtendedField("hosts", []string{"*"})
+			key.AddExtendedField("hosts", []interface{}{"*"})
 		default:
 			// should catch keys 1, 3, 5.
-			key.AddExtendedField("hosts", []string{"*.example.com"})
+			key.AddExtendedField("hosts", []interface{}{"*.example.com"})
 		}
 
 		keys = append(keys, key)

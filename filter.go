@@ -11,7 +11,7 @@ func FilterByHosts(keys []PublicKey, host string, includeEmpty bool) ([]PublicKe
 	filtered := make([]PublicKey, 0, len(keys))
 
 	for _, pubKey := range keys {
-		hosts, ok := pubKey.GetExtendedField("hosts").([]string)
+		hosts, ok := pubKey.GetExtendedField("hosts").([]interface{})
 
 		if !ok || (ok && len(hosts) == 0) {
 			if includeEmpty {
@@ -21,7 +21,12 @@ func FilterByHosts(keys []PublicKey, host string, includeEmpty bool) ([]PublicKe
 		}
 
 		// Check if any hosts match pattern
-		for _, hostPattern := range hosts {
+		for _, hostVal := range hosts {
+			hostPattern, ok := hostVal.(string)
+			if !ok {
+				continue
+			}
+
 			match, err := filepath.Match(hostPattern, host)
 			if err != nil {
 				return nil, err
