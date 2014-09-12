@@ -363,3 +363,55 @@ func TestFilterStatements(t *testing.T) {
 	}
 
 }
+
+func TestCreateStatement(t *testing.T) {
+	grantJSON := bytes.NewReader([]byte(`[
+   {
+      "subject": "/user-2",
+      "permission": 15,
+      "grantee": "/user-1"
+   },
+   {
+      "subject": "/user-7",
+      "permission": 1,
+      "grantee": "/user-9"
+   },
+   {
+      "subject": "/user-3",
+      "permission": 15,
+      "grantee": "/user-2"
+   }
+]`))
+	revocationJSON := bytes.NewReader([]byte(`[
+   {
+      "subject": "user-8",
+      "revocation": 12,
+      "grantee": "user-9"
+   }
+]`))
+
+	trustKey, pool, chain := generateTrustChain(t, 3)
+
+	statement, err := CreateStatement(grantJSON, revocationJSON, testStatementExpiration, trustKey, chain)
+	if err != nil {
+		t.Fatalf("Error creating statement: %s", err)
+	}
+
+	b, err := statement.Bytes()
+	if err != nil {
+		t.Fatalf("Error retrieving bytes: %s", err)
+	}
+
+	verified, err := LoadStatement(bytes.NewReader(b), pool)
+	if err != nil {
+		t.Fatalf("Error loading statement: %s", err)
+	}
+
+	if len(verified.Grants) != 3 {
+		t.Errorf("Unexpected number of grants, expected %d, received %d", 3, len(verified.Grants))
+	}
+
+	if len(verified.Revocations) != 1 {
+		t.Errorf("Unexpected number of revocations, expected %d, received %d", 1, len(verified.Revocations))
+	}
+}

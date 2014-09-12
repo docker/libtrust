@@ -97,6 +97,38 @@ func LoadStatement(r io.Reader, authority *x509.CertPool) (*Statement, error) {
 	return &statement, nil
 }
 
+// CreateStatements creates and signs a statement from a stream of grants
+// and revocations in a JSON array.
+func CreateStatement(grants, revocations io.Reader, expiration time.Duration, key libtrust.PrivateKey, chain []*x509.Certificate) (*Statement, error) {
+	var statement Statement
+	err := json.NewDecoder(grants).Decode(&statement.jsonStatement.Grants)
+	if err != nil {
+		return nil, err
+	}
+	err = json.NewDecoder(revocations).Decode(&statement.jsonStatement.Revocations)
+	if err != nil {
+		return nil, err
+	}
+	statement.jsonStatement.Expiration = time.Now().UTC().Add(expiration)
+	statement.jsonStatement.IssuedAt = time.Now().UTC()
+
+	b, err := json.MarshalIndent(&statement.jsonStatement, "", "   ")
+	if err != nil {
+		return nil, err
+	}
+
+	statement.signature, err = libtrust.NewJSONSignature(b)
+	if err != nil {
+		return nil, err
+	}
+	err = statement.signature.SignWithChain(key, chain)
+	if err != nil {
+		return nil, err
+	}
+
+	return &statement, nil
+}
+
 type statementList []*Statement
 
 func (s statementList) Len() int {
