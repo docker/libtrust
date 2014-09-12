@@ -4,7 +4,9 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"net"
 	"time"
@@ -131,4 +133,43 @@ func GenerateCACertPool(signer PrivateKey, trustedKeys []PublicKey) (*x509.CertP
 	}
 
 	return certPool, nil
+}
+
+// LoadCertificateBundle loads certificates from the given file.  The file should be pem encoded
+// containing one or more certificates.  The expected pem type is "CERTIFICATE".
+func LoadCertificateBundle(filename string) ([]*x509.Certificate, error) {
+	b, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	certificates := []*x509.Certificate{}
+	var block *pem.Block
+	block, b = pem.Decode(b)
+	for ; block != nil; block, b = pem.Decode(b) {
+		if block.Type == "CERTIFICATE" {
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				return nil, err
+			}
+			certificates = append(certificates, cert)
+		} else {
+			return nil, fmt.Errorf("invalid pem block type: %s", block.Type)
+		}
+	}
+
+	return certificates, nil
+}
+
+// LoadCertificatePool loads a CA pool from the given file.  The file should be pem encoded
+// containing one or more certificates. The expected pem type is "CERTIFICATE".
+func LoadCertificatePool(filename string) (*x509.CertPool, error) {
+	certs, err := LoadCertificateBundle(filename)
+	if err != nil {
+		return nil, err
+	}
+	pool := x509.NewCertPool()
+	for _, cert := range certs {
+		pool.AddCert(cert)
+	}
+	return pool, nil
 }
