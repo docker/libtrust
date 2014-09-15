@@ -2,14 +2,12 @@ package libtrust
 
 import (
 	"bytes"
-	"crypto/rand"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"testing"
-	"time"
+
+	"github.com/docker/libtrust/testutil"
 )
 
 func createTestJSON(sigKey string, indent string) (map[string]interface{}, []byte) {
@@ -201,122 +199,44 @@ func TestFormattedFlatJson(t *testing.T) {
 	}
 }
 
-func generateTrustCA() (PrivateKey, *x509.Certificate) {
-	key, err := GenerateECP256PrivateKey()
-	if err != nil {
-		panic(err)
-	}
-	cert := &x509.Certificate{
-		SerialNumber: big.NewInt(0),
-		Subject: pkix.Name{
-			CommonName: "CA Root",
-		},
-		NotBefore:             time.Now().Add(-time.Second),
-		NotAfter:              time.Now().Add(time.Hour),
-		IsCA:                  true,
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		BasicConstraintsValid: true,
-	}
-
-	certDER, err := x509.CreateCertificate(
-		rand.Reader, cert, cert,
-		key.CryptoPublicKey(), key.CryptoPrivateKey(),
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	cert, err = x509.ParseCertificate(certDER)
-	if err != nil {
-		panic(err)
-	}
-
-	return key, cert
-}
-
-func generateIntermediate(key PublicKey, parentKey PrivateKey, parent *x509.Certificate) *x509.Certificate {
-	cert := &x509.Certificate{
-		SerialNumber: big.NewInt(0),
-		Subject: pkix.Name{
-			CommonName: "Intermediate",
-		},
-		NotBefore:             time.Now().Add(-time.Second),
-		NotAfter:              time.Now().Add(time.Hour),
-		IsCA:                  true,
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		BasicConstraintsValid: true,
-	}
-
-	certDER, err := x509.CreateCertificate(
-		rand.Reader, cert, parent,
-		key.CryptoPublicKey(), parentKey.CryptoPrivateKey(),
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	cert, err = x509.ParseCertificate(certDER)
-	if err != nil {
-		panic(err)
-	}
-
-	return cert
-}
-
-func generateTrustCert(key PublicKey, parentKey PrivateKey, parent *x509.Certificate) *x509.Certificate {
-	cert := &x509.Certificate{
-		SerialNumber: big.NewInt(0),
-		Subject: pkix.Name{
-			CommonName: "Trust Cert",
-		},
-		NotBefore:             time.Now().Add(-time.Second),
-		NotAfter:              time.Now().Add(time.Hour),
-		IsCA:                  true,
-		KeyUsage:              x509.KeyUsageDigitalSignature,
-		BasicConstraintsValid: true,
-	}
-
-	certDER, err := x509.CreateCertificate(
-		rand.Reader, cert, parent,
-		key.CryptoPublicKey(), parentKey.CryptoPrivateKey(),
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	cert, err = x509.ParseCertificate(certDER)
-	if err != nil {
-		panic(err)
-	}
-
-	return cert
-}
-
-func generateTrustChain(key PrivateKey, ca *x509.Certificate) (PrivateKey, []*x509.Certificate) {
+func generateTrustChain(t *testing.T, key PrivateKey, ca *x509.Certificate) (PrivateKey, []*x509.Certificate) {
 	parent := ca
 	parentKey := key
 	chain := make([]*x509.Certificate, 6)
 	for i := 5; i > 0; i-- {
 		intermediatekey, err := GenerateECP256PrivateKey()
 		if err != nil {
-			panic(err)
+			t.Fatalf("Error generate key: %s", err)
 		}
-		chain[i] = generateIntermediate(intermediatekey, parentKey, parent)
+		chain[i], err = testutil.GenerateIntermediate(intermediatekey.CryptoPublicKey(), parentKey.CryptoPrivateKey(), parent)
+		if err != nil {
+			t.Fatalf("Error generating intermdiate certificate: %s", err)
+		}
 		parent = chain[i]
 		parentKey = intermediatekey
 	}
 	trustKey, err := GenerateECP256PrivateKey()
 	if err != nil {
-		panic(err)
+		t.Fatalf("Error generate key: %s", err)
 	}
-	chain[0] = generateTrustCert(trustKey, parentKey, parent)
+	chain[0], err = testutil.GenerateTrustCert(trustKey.CryptoPublicKey(), parentKey.CryptoPrivateKey(), parent)
+	if err != nil {
+		t.Fatalf("Error generate trust cert: %s", err)
+	}
 
 	return trustKey, chain
 }
 
 func TestChainVerify(t *testing.T) {
-	caKey, ca := generateTrustCA()
-	trustKey, chain := generateTrustChain(caKey, ca)
+	caKey, err := GenerateECP256PrivateKey()
+	if err != nil {
+		t.Fatalf("Error generating key: %s", err)
+	}
+	ca, err := testutil.GenerateTrustCA(caKey.CryptoPublicKey(), caKey.CryptoPrivateKey())
+	if err != nil {
+		t.Fatalf("Error generating ca: %s", err)
+	}
+	trustKey, chain := generateTrustChain(t, caKey, ca)
 
 	testMap, _ := createTestJSON("verifySignatures", "   ")
 	js, err := NewJSONSignatureFromMap(testMap)
@@ -344,8 +264,15 @@ func TestChainVerify(t *testing.T) {
 }
 
 func TestInvalidChain(t *testing.T) {
-	caKey, ca := generateTrustCA()
-	trustKey, chain := generateTrustChain(caKey, ca)
+	caKey, err := GenerateECP256PrivateKey()
+	if err != nil {
+		t.Fatalf("Error generating key: %s", err)
+	}
+	ca, err := testutil.GenerateTrustCA(caKey.CryptoPublicKey(), caKey.CryptoPrivateKey())
+	if err != nil {
+		t.Fatalf("Error generating ca: %s", err)
+	}
+	trustKey, chain := generateTrustChain(t, caKey, ca)
 
 	testMap, _ := createTestJSON("verifySignatures", "   ")
 	js, err := NewJSONSignatureFromMap(testMap)
