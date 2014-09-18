@@ -199,6 +199,77 @@ func TestFormattedFlatJson(t *testing.T) {
 	}
 }
 
+func TestJWS(t *testing.T) {
+	key, err := GenerateECP256PrivateKey()
+	if err != nil {
+		t.Fatalf("Error generating EC key: %s", err)
+	}
+
+	testMap, firstSection := createTestJSON("buildSignatures", "     ")
+	indented, err := json.MarshalIndent(testMap, "", "     ")
+	if err != nil {
+		t.Fatalf("Marshall error: %s", err)
+	}
+
+	js, err := NewJSONSignature(indented)
+	if err != nil {
+		t.Fatalf("Error creating JSON signature: %s", err)
+	}
+	err = js.Sign(key)
+	if err != nil {
+		t.Fatalf("Error signing content: %s", err)
+	}
+
+	b, err := js.JWS()
+	if err != nil {
+		t.Fatalf("Error signing map: %s", err)
+	}
+
+	if bytes.Compare(b[:len(firstSection)], firstSection) != 0 {
+		t.Fatalf("Wrong signed value\nExpected:\n%s\nActual:\n%s", firstSection, b[:len(firstSection)])
+	}
+
+	parsed, err := ParseJWS(b)
+	if err != nil {
+		t.Fatalf("Error parsing formatted signature: %s", err)
+	}
+
+	bCopy := make([]byte, len(b))
+	copy(bCopy, b)
+	var modified map[string]interface{}
+	json.Unmarshal(bCopy, &modified)
+	delete(modified, "signatures")
+	bNoSigs, _ := json.Marshal(modified)
+	_, err = ParseJWS(bNoSigs)
+	if err == nil {
+		t.Fatalf("Expected error parsing JWS without signatures")
+	}
+
+	bCopy[0] = '['
+	_, err = ParseJWS(bCopy)
+	if err == nil {
+		t.Fatalf("Expected error parsing invalid JSON")
+	}
+
+	keys, err := parsed.Verify()
+	if err != nil {
+		t.Fatalf("Error verifying signature: %s", err)
+	}
+	if len(keys) != 1 {
+		t.Fatalf("Error wrong number of keys returned")
+	}
+	if keys[0].KeyID() != key.KeyID() {
+		t.Fatalf("Unexpected public key returned")
+	}
+
+	var unmarshalled map[string]interface{}
+	err = json.Unmarshal(b, &unmarshalled)
+	if err != nil {
+		t.Fatalf("Could not unmarshall after parse: %s", err)
+	}
+
+}
+
 func generateTrustChain(t *testing.T, key PrivateKey, ca *x509.Certificate) (PrivateKey, []*x509.Certificate) {
 	parent := ca
 	parentKey := key
