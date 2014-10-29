@@ -13,15 +13,15 @@ import (
 )
 
 type jsonGrant struct {
-	Subject    string `json:"subject"`
-	Permission uint16 `json:"permission"`
-	Grantee    string `json:"grantee"`
+	Subject string   `json:"subject"`
+	Scopes  []string `json:"scopes"`
+	Grantee string   `json:"grantee"`
 }
 
 type jsonRevocation struct {
-	Subject    string `json:"subject"`
-	Revocation uint16 `json:"revocation"`
-	Grantee    string `json:"grantee"`
+	Subject    string   `json:"subject"`
+	Revocation []string `json:"revocation"`
+	Grantee    string   `json:"grantee"`
 }
 
 type jsonStatement struct {
@@ -33,10 +33,10 @@ type jsonStatement struct {
 
 func (g *jsonGrant) Grant(statement *Statement) *Grant {
 	return &Grant{
-		Subject:    g.Subject,
-		Permission: g.Permission,
-		Grantee:    g.Grantee,
-		statement:  statement,
+		Subject:   g.Subject,
+		Scopes:    g.Scopes,
+		Grantee:   g.Grantee,
+		statement: statement,
 	}
 }
 
@@ -143,6 +143,16 @@ func (s statementList) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
+func removeScope(scope string, scopes []string) []string {
+	newScopes := make([]string, 0, len(scopes))
+	for _, s := range scopes {
+		if s != scope {
+			newScopes = append(newScopes, s)
+		}
+	}
+	return newScopes
+}
+
 // CollapseStatements returns a single list of the valid statements as well as the
 // time when the next grant will expire.
 func CollapseStatements(statements []*Statement, useExpired bool) ([]*Grant, time.Time, error) {
@@ -194,7 +204,9 @@ func CollapseStatements(statements []*Statement, useExpired bool) ([]*Grant, tim
 			if node != nil {
 				for _, grant := range node.grants {
 					if isSubName(grant.Subject, revocation.Subject) {
-						grant.Permission = grant.Permission &^ revocation.Revocation
+						for _, revokeScope := range revocation.Revocation {
+							grant.Scopes = removeScope(revokeScope, grant.Scopes)
+						}
 					}
 				}
 			}
