@@ -16,10 +16,14 @@ func runGenerateBench(b *testing.B, f generateFunc, name string) {
 }
 
 func runFingerprintBench(b *testing.B, f generateFunc, name string) {
+	b.StopTimer()
+	// Don't count this relatively slow generation call.
 	key, err := f()
 	if err != nil {
 		b.Fatalf("Error generating %s: %s", name, err)
 	}
+	b.StartTimer()
+
 	for i := 0; i < b.N; i++ {
 		if key.KeyID() == "" {
 			b.Fatalf("Error generating key ID for %s", name)
