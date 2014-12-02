@@ -16,9 +16,10 @@ func createTestKeysAndGrants(count int) ([]*Grant, []libtrust.PrivateKey) {
 			panic(err)
 		}
 		grant := &Grant{
-			Subject: fmt.Sprintf("/user-%d", i+1),
-			Scopes:  []string{"delegate"},
-			Grantee: pk.KeyID(),
+			Subject:   fmt.Sprintf("/user-%d", i+1),
+			Scopes:    []string{"any"},
+			Delegated: true,
+			Grantee:   pk.KeyID(),
 		}
 		keys[i] = pk
 		grants[i] = grant
@@ -46,14 +47,16 @@ func TestVerify(t *testing.T) {
 	grants, keys := createTestKeysAndGrants(4)
 	extraGrants := make([]*Grant, 3)
 	extraGrants[0] = &Grant{
-		Subject: "/user-3",
-		Scopes:  []string{"delegate"},
-		Grantee: "/user-2",
+		Subject:   "/user-3",
+		Scopes:    []string{"any"},
+		Delegated: true,
+		Grantee:   "/user-2",
 	}
 	extraGrants[1] = &Grant{
-		Subject: "/user-3/sub-project",
-		Scopes:  []string{"delegate"},
-		Grantee: "/user-4",
+		Subject:   "/user-3/sub-project",
+		Scopes:    []string{"any"},
+		Delegated: true,
+		Grantee:   "/user-4",
 	}
 	extraGrants[2] = &Grant{
 		Subject: "/user-4",
@@ -88,14 +91,16 @@ func TestVerify(t *testing.T) {
 func TestCircularWalk(t *testing.T) {
 	grants, keys := createTestKeysAndGrants(3)
 	user1Grant := &Grant{
-		Subject: "/user-2",
-		Scopes:  []string{"delegate"},
-		Grantee: "/user-1",
+		Subject:   "/user-2",
+		Scopes:    []string{"any"},
+		Delegated: true,
+		Grantee:   "/user-1",
 	}
 	user2Grant := &Grant{
-		Subject: "/user-1",
-		Scopes:  []string{"delegate"},
-		Grantee: "/user-2",
+		Subject:   "/user-1",
+		Scopes:    []string{"any"},
+		Delegated: true,
+		Grantee:   "/user-2",
 	}
 	grants = append(grants, user1Grant, user2Grant)
 
@@ -121,24 +126,28 @@ func TestGetGrants(t *testing.T) {
 	grants, keys := createTestKeysAndGrants(5)
 	extraGrants := make([]*Grant, 4)
 	extraGrants[0] = &Grant{
-		Subject: "/user-3/friend-project",
-		Scopes:  []string{"delegate"},
-		Grantee: "/user-2/friends",
+		Subject:   "/user-3/friend-project",
+		Scopes:    []string{"any"},
+		Delegated: true,
+		Grantee:   "/user-2/friends",
 	}
 	extraGrants[1] = &Grant{
-		Subject: "/user-3/sub-project",
-		Scopes:  []string{"delegate"},
-		Grantee: "/user-4",
+		Subject:   "/user-3/sub-project",
+		Scopes:    []string{"any"},
+		Delegated: true,
+		Grantee:   "/user-4",
 	}
 	extraGrants[2] = &Grant{
-		Subject: "/user-2/friends",
-		Scopes:  []string{"delegate"},
-		Grantee: "/user-5/fun-project",
+		Subject:   "/user-2/friends",
+		Scopes:    []string{"any"},
+		Delegated: true,
+		Grantee:   "/user-5/fun-project",
 	}
 	extraGrants[3] = &Grant{
-		Subject: "/user-5/fun-project",
-		Scopes:  []string{"delegate"},
-		Grantee: "/user-1",
+		Subject:   "/user-5/fun-project",
+		Scopes:    []string{"any"},
+		Delegated: true,
+		Grantee:   "/user-1",
 	}
 	grants = append(grants, extraGrants...)
 

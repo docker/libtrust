@@ -14,24 +14,3 @@ type TrustGraph interface {
 	// allow the requested scope.
 	GetGrants(libtrust.PublicKey, string, string) ([][]*Grant, error)
 }
-
-// Grant represents a transfer of permission from one part of the
-// trust graph to another. This is the only way to delegate
-// permission between two different sub trees in the graph.
-type Grant struct {
-	// Subject is the namespace being granted
-	Subject string
-
-	// Scopes is an array of allowed actions.
-	Scopes []string
-
-	// Grantee represents the node being granted
-	// a permission scope.  The grantee can be
-	// either a namespace item or a key id where namespace
-	// items will always start with a '/'.
-	Grantee string
-
-	// statement represents the statement used to create
-	// this object.
-	statement *Statement
-}

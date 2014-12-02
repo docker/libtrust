@@ -30,12 +30,45 @@ func newGrantNode() *grantNode {
 	}
 }
 
+func grantSameScope(g1, g2 *Grant) bool {
+	if g1.Grantee != g2.Grantee {
+		return false
+	}
+	if g1.Subject != g2.Subject {
+		return false
+	}
+	if len(g1.Scopes) != len(g2.Scopes) {
+		return false
+	}
+
+	// Check if any scopes don't match up
+	for s1 := range g1.Scopes {
+		var found bool
+		for s2 := range g2.Scopes {
+			if s1 == s2 {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+
+	return true
+
+}
+
 // NewMemoryGraph returns a new in memory trust graph created from
 // a static list of grants.  This graph is immutable after creation
 // and any alterations should create a new instance.
 func NewMemoryGraph(grants []*Grant) TrustGraph {
 	roots := map[string]*grantNode{}
+	var revocations []*Grant
 	for _, grant := range grants {
+		if grant.Revoked {
+			revocations = append(revocations, grant)
+		}
 		parts := strings.Split(grant.Grantee, "/")
 		nodes := roots
 		var node *grantNode
@@ -48,6 +81,29 @@ func NewMemoryGraph(grants []*Grant) TrustGraph {
 			}
 			if part != "" {
 				node.grants = append(node.grants, grant)
+			}
+			nodes = node.children
+		}
+	}
+	for _, revocation := range revocations {
+		// Only apply revocation on existing grants
+		parts := strings.Split(revocation.Grantee, "/")
+		nodes := roots
+		var node *grantNode
+		var nodeOk bool
+		for _, part := range parts {
+			node, nodeOk = nodes[part]
+			if !nodeOk {
+				break
+			}
+
+			for i, grant := range node.grants {
+				if grantSameScope(grant, revocation) {
+					if grant.IssuedAt.Before(revocation.IssuedAt) {
+						// Replace grant with revocation
+						node.grants[i] = revocation
+					}
+				}
 			}
 			nodes = node.children
 		}
@@ -79,18 +135,17 @@ func isSubName(name, sub string) bool {
 	return false
 }
 
-func getScope(scope string, scopes []string) permission {
-	delegation := "delegate_" + scope
-	var isPermitted bool
-	for _, s := range scopes {
-		if s == "delegate" || s == delegation {
-			return delegated
-		}
+func getScope(scope string, grant *Grant) permission {
+	var isScoped bool
+	for _, s := range grant.Scopes {
 		if s == "any" || s == scope {
-			isPermitted = true
+			isScoped = true
 		}
 	}
-	if isPermitted {
+	if isScoped {
+		if grant.Delegated {
+			return delegated
+		}
 		return permitted
 	}
 	return notPermitted
@@ -113,7 +168,7 @@ func (g *memoryGraph) walkGrants(start, target string, scope string, f walkFunc,
 			continue
 		}
 		visited[grant] = true
-		permissionScope := getScope(scope, grant.Scopes)
+		permissionScope := getScope(scope, grant)
 		if permissionScope == permitted {
 			// TODO replace isSubName with isChild
 			if isSubName(target, grant.Subject) {
