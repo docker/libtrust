@@ -51,7 +51,7 @@ func LoadOrCreateTrustKey(trustKeyPath string) (PrivateKey, error) {
 // based authentication from the specified dockerUrl and the rootConfigPath.
 // If trustUnknownHosts is true it will automatically add the host to the
 // known-hosts.json in rootConfigPath
-func NewIdentityAuthTLSClientConfig(dockerUrl string, trustUnknownHosts bool, rootConfigPath string) (*tls.Config, error) {
+func NewIdentityAuthTLSClientConfig(dockerUrl string, trustUnknownHosts bool, rootConfigPath string, serverName string) (*tls.Config, error) {
 	tlsConfig := newTLSConfig()
 
 	trustKeyPath := filepath.Join(rootConfigPath, "key.json")
@@ -89,7 +89,7 @@ func NewIdentityAuthTLSClientConfig(dockerUrl string, trustUnknownHosts bool, ro
 		return nil, fmt.Errorf("Could not create CA pool: %s", err)
 	}
 
-	tlsConfig.ServerName = "docker"
+	tlsConfig.ServerName = serverName
 	tlsConfig.RootCAs = certPool
 
 	x509Cert, err := GenerateSelfSignedClientCert(trustKey)

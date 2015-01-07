@@ -94,7 +94,7 @@ func (c *ClientKeyManager) RegisterTLSConfig(tlsConfig *tls.Config) error {
 
 // NewIdentityAuthTLSConfig creates a tls.Config for the server to use for
 // libtrust identity authentication
-func NewIdentityAuthTLSConfig(trustKey PrivateKey, clients *ClientKeyManager, addr string) (*tls.Config, error) {
+func NewIdentityAuthTLSConfig(trustKey PrivateKey, clients *ClientKeyManager, addr string, domain string) (*tls.Config, error) {
 	tlsConfig := newTLSConfig()
 
 	tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
@@ -108,7 +108,7 @@ func NewIdentityAuthTLSConfig(trustKey PrivateKey, clients *ClientKeyManager, ad
 		return nil, err
 	}
 	// add default docker domain for docker clients to look for
-	domains = append(domains, "docker")
+	domains = append(domains, domain)
 	x509Cert, err := GenerateSelfSignedServerCert(trustKey, domains, ips)
 	if err != nil {
 		return nil, fmt.Errorf("certificate generation error: %s", err)
