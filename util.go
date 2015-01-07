@@ -48,9 +48,10 @@ func LoadOrCreateTrustKey(trustKeyPath string) (PrivateKey, error) {
 }
 
 // NewIdentityAuthTLSClientConfig returns a tls.Config configured to use identity
-// based authentication from the specified dockerUrl and the rootConfigPath.
+// based authentication from the specified dockerUrl, the rootConfigPath and
+// the server name to which it is connecting.
 // If trustUnknownHosts is true it will automatically add the host to the
-// known-hosts.json in rootConfigPath
+// known-hosts.json in rootConfigPath.
 func NewIdentityAuthTLSClientConfig(dockerUrl string, trustUnknownHosts bool, rootConfigPath string, serverName string) (*tls.Config, error) {
 	tlsConfig := newTLSConfig()
 
