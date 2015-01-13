@@ -564,3 +564,19 @@ func (js *JSONSignature) PrettySignature(signatureKey string) ([]byte, error) {
 
 	return buf.Bytes(), nil
 }
+
+// Merge combines the signatures from one or more other signatures into the
+// method receiver. If the payloads differ for any argument, an error will be
+// returned and the receiver will not be modified.
+func (js *JSONSignature) Merge(others ...*JSONSignature) error {
+	merged := js.signatures
+	for _, other := range others {
+		if js.payload != other.payload {
+			return fmt.Errorf("payloads differ from merge target")
+		}
+		merged = append(merged, other.signatures...)
+	}
+
+	js.signatures = merged
+	return nil
+}
