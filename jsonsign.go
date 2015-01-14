@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 	"unicode"
 )
@@ -36,6 +37,22 @@ type jsSignature struct {
 	Protected string    `json:"protected,omitempty"`
 }
 
+type jsSignaturesSorted []*jsSignature
+
+func (jsbkid jsSignaturesSorted) Swap(i, j int) { jsbkid[i], jsbkid[j] = jsbkid[j], jsbkid[i] }
+func (jsbkid jsSignaturesSorted) Len() int      { return len(jsbkid) }
+
+func (jsbkid jsSignaturesSorted) Less(i, j int) bool {
+	ki, kj := jsbkid[i].Header.JWK.KeyID(), jsbkid[j].Header.JWK.KeyID()
+	si, sj := jsbkid[i].Signature, jsbkid[j].Signature
+
+	if ki == kj {
+		return si < sj
+	}
+
+	return ki < kj
+}
+
 type signKey struct {
 	PrivateKey
 	Chain []*x509.Certificate
@@ -44,7 +61,7 @@ type signKey struct {
 // JSONSignature represents a signature of a json object.
 type JSONSignature struct {
 	payload      string
-	signatures   []*jsSignature
+	signatures   []*jsSignature // TODO(stevvooe): This type does not need to be a pointer
 	indent       string
 	formatLength int
 	formatTail   []byte
@@ -272,6 +289,9 @@ func (js *JSONSignature) JWS() ([]byte, error) {
 	if len(js.signatures) == 0 {
 		return nil, errors.New("missing signature")
 	}
+
+	sort.Sort(jsSignaturesSorted(js.signatures))
+
 	jsonMap := map[string]interface{}{
 		"payload":    js.payload,
 		"signatures": js.signatures,
@@ -531,6 +551,8 @@ func (js *JSONSignature) PrettySignature(signatureKey string) ([]byte, error) {
 		return nil, err
 	}
 	payload = payload[:js.formatLength]
+
+	sort.Sort(jsSignaturesSorted(js.signatures))
 
 	var marshalled []byte
 	var marshallErr error
