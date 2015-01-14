@@ -376,7 +376,11 @@ func ParseJWS(content []byte) (*JSONSignature, error) {
 
 // NewJSONSignature returns a new unsigned JWS from a json byte array.
 // JSONSignature will need to be signed before serializing or storing.
-func NewJSONSignature(content []byte) (*JSONSignature, error) {
+// Optionally, one or more signatures can be provided as byte buffers,
+// containing serialized JWS signatures, to assemble a fully signed JWS
+// package. It is the callers responsibility to ensure uniqueness of the
+// provided signatures.
+func NewJSONSignature(content []byte, signatures ...[]byte) (*JSONSignature, error) {
 	var dataMap map[string]interface{}
 	err := json.Unmarshal(content, &dataMap)
 	if err != nil {
@@ -399,6 +403,40 @@ func NewJSONSignature(content []byte) (*JSONSignature, error) {
 	}
 	js.formatLength = lastRuneIndex + 1
 	js.formatTail = content[js.formatLength:]
+
+	if len(signatures) > 0 {
+		for _, signature := range signatures {
+			var parsedJSig jsParsedSignature
+
+			if err := json.Unmarshal(signature, &parsedJSig); err != nil {
+				return nil, err
+			}
+
+			// TODO(stevvooe): A lot of the code below is repeated in
+			// ParseJWS. It will require more refactoring to fix that.
+			jsig := &jsSignature{
+				Header: &jsHeader{
+					Algorithm: parsedJSig.Header.Algorithm,
+				},
+				Signature: parsedJSig.Signature,
+				Protected: parsedJSig.Protected,
+			}
+
+			if parsedJSig.Header.Chain != nil {
+				jsig.Header.Chain = parsedJSig.Header.Chain
+			}
+
+			if parsedJSig.Header.JWK != nil {
+				publicKey, err := UnmarshalPublicKeyJWK([]byte(parsedJSig.Header.JWK))
+				if err != nil {
+					return nil, err
+				}
+				jsig.Header.JWK = publicKey
+			}
+
+			js.signatures = append(js.signatures, jsig)
+		}
+	}
 
 	return js, nil
 }
@@ -585,6 +623,26 @@ func (js *JSONSignature) PrettySignature(signatureKey string) ([]byte, error) {
 	buf.WriteByte('}')
 
 	return buf.Bytes(), nil
+}
+
+// Signatures provides the signatures on this JWS as opaque blobs, sorted by
+// keyID. These blobs can be stored and reassembled with payloads. Internally,
+// they are simply marshaled json web signatures but implementations should
+// not rely on this.
+func (js *JSONSignature) Signatures() ([][]byte, error) {
+	sort.Sort(jsSignaturesSorted(js.signatures))
+
+	var sb [][]byte
+	for _, jsig := range js.signatures {
+		p, err := json.Marshal(jsig)
+		if err != nil {
+			return nil, err
+		}
+
+		sb = append(sb, p)
+	}
+
+	return sb, nil
 }
 
 // Merge combines the signatures from one or more other signatures into the
