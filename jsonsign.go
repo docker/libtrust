@@ -32,12 +32,12 @@ type jsHeader struct {
 }
 
 type jsSignature struct {
-	Header    *jsHeader `json:"header"`
-	Signature string    `json:"signature"`
-	Protected string    `json:"protected,omitempty"`
+	Header    jsHeader `json:"header"`
+	Signature string   `json:"signature"`
+	Protected string   `json:"protected,omitempty"`
 }
 
-type jsSignaturesSorted []*jsSignature
+type jsSignaturesSorted []jsSignature
 
 func (jsbkid jsSignaturesSorted) Swap(i, j int) { jsbkid[i], jsbkid[j] = jsbkid[j], jsbkid[i] }
 func (jsbkid jsSignaturesSorted) Len() int      { return len(jsbkid) }
@@ -61,7 +61,7 @@ type signKey struct {
 // JSONSignature represents a signature of a json object.
 type JSONSignature struct {
 	payload      string
-	signatures   []*jsSignature // TODO(stevvooe): This type does not need to be a pointer
+	signatures   []jsSignature
 	indent       string
 	formatLength int
 	formatTail   []byte
@@ -69,7 +69,7 @@ type JSONSignature struct {
 
 func newJSONSignature() *JSONSignature {
 	return &JSONSignature{
-		signatures: make([]*jsSignature, 0, 1),
+		signatures: make([]jsSignature, 0, 1),
 	}
 }
 
@@ -116,17 +116,14 @@ func (js *JSONSignature) Sign(key PrivateKey) error {
 		return err
 	}
 
-	header := &jsHeader{
-		JWK:       key.PublicKey(),
-		Algorithm: algorithm,
-	}
-	sig := &jsSignature{
-		Header:    header,
+	js.signatures = append(js.signatures, jsSignature{
+		Header: jsHeader{
+			JWK:       key.PublicKey(),
+			Algorithm: algorithm,
+		},
 		Signature: joseBase64UrlEncode(sigBytes),
 		Protected: protected,
-	}
-
-	js.signatures = append(js.signatures, sig)
+	})
 
 	return nil
 }
@@ -153,7 +150,7 @@ func (js *JSONSignature) SignWithChain(key PrivateKey, chain []*x509.Certificate
 		return err
 	}
 
-	header := &jsHeader{
+	header := jsHeader{
 		Chain:     make([]string, len(chain)),
 		Algorithm: algorithm,
 	}
@@ -162,13 +159,11 @@ func (js *JSONSignature) SignWithChain(key PrivateKey, chain []*x509.Certificate
 		header.Chain[i] = base64.StdEncoding.EncodeToString(cert.Raw)
 	}
 
-	sig := &jsSignature{
+	js.signatures = append(js.signatures, jsSignature{
 		Header:    header,
 		Signature: joseBase64UrlEncode(sigBytes),
 		Protected: protected,
-	}
-
-	js.signatures = append(js.signatures, sig)
+	})
 
 	return nil
 }
@@ -321,16 +316,16 @@ type jsParsedHeader struct {
 }
 
 type jsParsedSignature struct {
-	Header    *jsParsedHeader `json:"header"`
-	Signature string          `json:"signature"`
-	Protected string          `json:"protected"`
+	Header    jsParsedHeader `json:"header"`
+	Signature string         `json:"signature"`
+	Protected string         `json:"protected"`
 }
 
 // ParseJWS parses a JWS serialized JSON object into a Json Signature.
 func ParseJWS(content []byte) (*JSONSignature, error) {
 	type jsParsed struct {
-		Payload    string               `json:"payload"`
-		Signatures []*jsParsedSignature `json:"signatures"`
+		Payload    string              `json:"payload"`
+		Signatures []jsParsedSignature `json:"signatures"`
 	}
 	parsed := &jsParsed{}
 	err := json.Unmarshal(content, parsed)
@@ -349,9 +344,9 @@ func ParseJWS(content []byte) (*JSONSignature, error) {
 	if err != nil {
 		return nil, err
 	}
-	js.signatures = make([]*jsSignature, len(parsed.Signatures))
+	js.signatures = make([]jsSignature, len(parsed.Signatures))
 	for i, signature := range parsed.Signatures {
-		header := &jsHeader{
+		header := jsHeader{
 			Algorithm: signature.Header.Algorithm,
 		}
 		if signature.Header.Chain != nil {
@@ -364,7 +359,7 @@ func ParseJWS(content []byte) (*JSONSignature, error) {
 			}
 			header.JWK = publicKey
 		}
-		js.signatures[i] = &jsSignature{
+		js.signatures[i] = jsSignature{
 			Header:    header,
 			Signature: signature.Signature,
 			Protected: signature.Protected,
@@ -414,8 +409,8 @@ func NewJSONSignature(content []byte, signatures ...[]byte) (*JSONSignature, err
 
 			// TODO(stevvooe): A lot of the code below is repeated in
 			// ParseJWS. It will require more refactoring to fix that.
-			jsig := &jsSignature{
-				Header: &jsHeader{
+			jsig := jsSignature{
+				Header: jsHeader{
 					Algorithm: parsedJSig.Header.Algorithm,
 				},
 				Signature: parsedJSig.Signature,
@@ -513,7 +508,7 @@ func ParsePrettySignature(content []byte, signatureKey string) (*JSONSignature, 
 	}
 
 	js := newJSONSignature()
-	js.signatures = make([]*jsSignature, len(signatureBlocks))
+	js.signatures = make([]jsSignature, len(signatureBlocks))
 
 	for i, signatureBlock := range signatureBlocks {
 		protectedBytes, err := joseBase64UrlDecode(signatureBlock.Protected)
@@ -549,7 +544,7 @@ func ParsePrettySignature(content []byte, signatureKey string) (*JSONSignature, 
 			return nil, errors.New("conflicting format tail")
 		}
 
-		header := &jsHeader{
+		header := jsHeader{
 			Algorithm: signatureBlock.Header.Algorithm,
 			Chain:     signatureBlock.Header.Chain,
 		}
@@ -560,7 +555,7 @@ func ParsePrettySignature(content []byte, signatureKey string) (*JSONSignature, 
 			}
 			header.JWK = publicKey
 		}
-		js.signatures[i] = &jsSignature{
+		js.signatures[i] = jsSignature{
 			Header:    header,
 			Signature: signatureBlock.Signature,
 			Protected: signatureBlock.Protected,
