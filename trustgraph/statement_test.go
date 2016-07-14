@@ -19,9 +19,9 @@ func generateStatement(grants []*Grant, key libtrust.PrivateKey, chain []*x509.C
 	statement.Grants = make([]*jsonGrant, len(grants))
 	for i, grant := range grants {
 		statement.Grants[i] = &jsonGrant{
-			Subject:    grant.Subject,
-			Permission: grant.Permission,
-			Grantee:    grant.Grantee,
+			Subject: grant.Subject,
+			Scopes:  []string{"delegate"},
+			Grantee: grant.Grantee,
 		}
 	}
 	statement.IssuedAt = time.Now()
@@ -148,24 +148,24 @@ func TestCollapseGrants(t *testing.T) {
 	grants, keys := createTestKeysAndGrants(grantCount)
 	linkGrants := make([]*Grant, 4)
 	linkGrants[0] = &Grant{
-		Subject:    "/user-3",
-		Permission: 0x0f,
-		Grantee:    "/user-2",
+		Subject: "/user-3",
+		Scopes:  []string{"delegate"},
+		Grantee: "/user-2",
 	}
 	linkGrants[1] = &Grant{
-		Subject:    "/user-3/sub-project",
-		Permission: 0x0f,
-		Grantee:    "/user-4",
+		Subject: "/user-3/sub-project",
+		Scopes:  []string{"delegate"},
+		Grantee: "/user-4",
 	}
 	linkGrants[2] = &Grant{
-		Subject:    "/user-6",
-		Permission: 0x0f,
-		Grantee:    "/user-7",
+		Subject: "/user-6",
+		Scopes:  []string{"delegate"},
+		Grantee: "/user-7",
 	}
 	linkGrants[3] = &Grant{
-		Subject:    "/user-6/sub-project/specific-app",
-		Permission: 0x0f,
-		Grantee:    "/user-5",
+		Subject: "/user-6/sub-project/specific-app",
+		Scopes:  []string{"delegate"},
+		Grantee: "/user-5",
 	}
 	trustKey, pool, chain := generateTrustChain(t, 3)
 
@@ -208,24 +208,24 @@ func TestCollapseGrants(t *testing.T) {
 	}
 	g := NewMemoryGraph(collapsedGrants)
 
-	testVerified(t, g, keys[0].PublicKey(), "user-key-1", "/user-1", 0x0f)
-	testVerified(t, g, keys[1].PublicKey(), "user-key-2", "/user-2", 0x0f)
-	testVerified(t, g, keys[2].PublicKey(), "user-key-3", "/user-3", 0x0f)
-	testVerified(t, g, keys[3].PublicKey(), "user-key-4", "/user-4", 0x0f)
-	testVerified(t, g, keys[4].PublicKey(), "user-key-5", "/user-5", 0x0f)
-	testVerified(t, g, keys[5].PublicKey(), "user-key-6", "/user-6", 0x0f)
-	testVerified(t, g, keys[6].PublicKey(), "user-key-7", "/user-7", 0x0f)
-	testVerified(t, g, keys[7].PublicKey(), "user-key-8", "/user-8", 0x0f)
-	testVerified(t, g, keys[1].PublicKey(), "user-key-2", "/user-3", 0x0f)
-	testVerified(t, g, keys[1].PublicKey(), "user-key-2", "/user-3/sub-project/specific-app", 0x0f)
-	testVerified(t, g, keys[3].PublicKey(), "user-key-4", "/user-3/sub-project", 0x0f)
-	testVerified(t, g, keys[6].PublicKey(), "user-key-7", "/user-6", 0x0f)
-	testVerified(t, g, keys[6].PublicKey(), "user-key-7", "/user-6/sub-project/specific-app", 0x0f)
-	testVerified(t, g, keys[4].PublicKey(), "user-key-5", "/user-6/sub-project/specific-app", 0x0f)
+	testVerified(t, g, keys[0].PublicKey(), "user-key-1", "/user-1", "test")
+	testVerified(t, g, keys[1].PublicKey(), "user-key-2", "/user-2", "test")
+	testVerified(t, g, keys[2].PublicKey(), "user-key-3", "/user-3", "test")
+	testVerified(t, g, keys[3].PublicKey(), "user-key-4", "/user-4", "test")
+	testVerified(t, g, keys[4].PublicKey(), "user-key-5", "/user-5", "test")
+	testVerified(t, g, keys[5].PublicKey(), "user-key-6", "/user-6", "test")
+	testVerified(t, g, keys[6].PublicKey(), "user-key-7", "/user-7", "test")
+	testVerified(t, g, keys[7].PublicKey(), "user-key-8", "/user-8", "test")
+	testVerified(t, g, keys[1].PublicKey(), "user-key-2", "/user-3", "test")
+	testVerified(t, g, keys[1].PublicKey(), "user-key-2", "/user-3/sub-project/specific-app", "test")
+	testVerified(t, g, keys[3].PublicKey(), "user-key-4", "/user-3/sub-project", "test")
+	testVerified(t, g, keys[6].PublicKey(), "user-key-7", "/user-6", "test")
+	testVerified(t, g, keys[6].PublicKey(), "user-key-7", "/user-6/sub-project/specific-app", "test")
+	testVerified(t, g, keys[4].PublicKey(), "user-key-5", "/user-6/sub-project/specific-app", "test")
 
-	testNotVerified(t, g, keys[3].PublicKey(), "user-key-4", "/user-3", 0x0f)
-	testNotVerified(t, g, keys[3].PublicKey(), "user-key-4", "/user-6/sub-project", 0x0f)
-	testNotVerified(t, g, keys[4].PublicKey(), "user-key-5", "/user-6/sub-project", 0x0f)
+	testNotVerified(t, g, keys[3].PublicKey(), "user-key-4", "/user-3", "test")
+	testNotVerified(t, g, keys[3].PublicKey(), "user-key-4", "/user-6/sub-project", "test")
+	testNotVerified(t, g, keys[4].PublicKey(), "user-key-5", "/user-6/sub-project", "test")
 
 	// Add revocation grant
 	statements = append(statements, &Statement{
@@ -236,22 +236,22 @@ func TestCollapseGrants(t *testing.T) {
 			Revocations: []*jsonRevocation{
 				&jsonRevocation{
 					Subject:    "/user-1",
-					Revocation: 0x0f,
+					Revocation: []string{"delegate"},
 					Grantee:    keys[0].KeyID(),
 				},
 				&jsonRevocation{
 					Subject:    "/user-2",
-					Revocation: 0x08,
+					Revocation: []string{"delegate"},
 					Grantee:    keys[1].KeyID(),
 				},
 				&jsonRevocation{
 					Subject:    "/user-6",
-					Revocation: 0x0f,
+					Revocation: []string{"delegate"},
 					Grantee:    "/user-7",
 				},
 				&jsonRevocation{
 					Subject:    "/user-9",
-					Revocation: 0x0f,
+					Revocation: []string{"delegate"},
 					Grantee:    "/user-10",
 				},
 			},
@@ -268,11 +268,12 @@ func TestCollapseGrants(t *testing.T) {
 	}
 	g = NewMemoryGraph(collapsedGrants)
 
-	testNotVerified(t, g, keys[0].PublicKey(), "user-key-1", "/user-1", 0x0f)
-	testNotVerified(t, g, keys[1].PublicKey(), "user-key-2", "/user-2", 0x0f)
-	testNotVerified(t, g, keys[6].PublicKey(), "user-key-7", "/user-6/sub-project/specific-app", 0x0f)
+	testNotVerified(t, g, keys[0].PublicKey(), "user-key-1", "/user-1", "test")
+	testNotVerified(t, g, keys[1].PublicKey(), "user-key-2", "/user-2", "test")
+	testNotVerified(t, g, keys[6].PublicKey(), "user-key-7", "/user-6/sub-project/specific-app", "test")
 
-	testVerified(t, g, keys[1].PublicKey(), "user-key-2", "/user-2", 0x07)
+	// TODO don't revoke delegate, just "test"
+	//testVerified(t, g, keys[1].PublicKey(), "user-key-2", "/user-2", "read")
 }
 
 func TestFilterStatements(t *testing.T) {
@@ -280,19 +281,19 @@ func TestFilterStatements(t *testing.T) {
 	grants, keys := createTestKeysAndGrants(grantCount)
 	linkGrants := make([]*Grant, 3)
 	linkGrants[0] = &Grant{
-		Subject:    "/user-3",
-		Permission: 0x0f,
-		Grantee:    "/user-2",
+		Subject: "/user-3",
+		Scopes:  []string{"delegate"},
+		Grantee: "/user-2",
 	}
 	linkGrants[1] = &Grant{
-		Subject:    "/user-5",
-		Permission: 0x0f,
-		Grantee:    "/user-4",
+		Subject: "/user-5",
+		Scopes:  []string{"delegate"},
+		Grantee: "/user-4",
 	}
 	linkGrants[2] = &Grant{
-		Subject:    "/user-7",
-		Permission: 0x0f,
-		Grantee:    "/user-6",
+		Subject: "/user-7",
+		Scopes:  []string{"delegate"},
+		Grantee: "/user-6",
 	}
 
 	trustKey, _, chain := generateTrustChain(t, 3)
@@ -344,7 +345,7 @@ func TestFilterStatements(t *testing.T) {
 
 	// Filter 3, 2 statements, from graph lookup
 	g := NewMemoryGraph(collapsed)
-	lookupGrants, err := g.GetGrants(keys[1], "/user-3", 0x0f)
+	lookupGrants, err := g.GetGrants(keys[1], "/user-3", "test")
 	if err != nil {
 		t.Fatalf("Error looking up grants: %s", err)
 	}
@@ -368,24 +369,24 @@ func TestCreateStatement(t *testing.T) {
 	grantJSON := bytes.NewReader([]byte(`[
    {
       "subject": "/user-2",
-      "permission": 15,
+      "scopes": ["delegate"],
       "grantee": "/user-1"
    },
    {
       "subject": "/user-7",
-      "permission": 1,
+      "scopes": ["write"],
       "grantee": "/user-9"
    },
    {
       "subject": "/user-3",
-      "permission": 15,
+      "scopes": ["delegate"],
       "grantee": "/user-2"
    }
 ]`))
 	revocationJSON := bytes.NewReader([]byte(`[
    {
       "subject": "user-8",
-      "revocation": 12,
+      "revocation": ["read"],
       "grantee": "user-9"
    }
 ]`))

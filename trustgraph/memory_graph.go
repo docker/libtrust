@@ -6,6 +6,14 @@ import (
 	"github.com/docker/libtrust"
 )
 
+type permission uint8
+
+var (
+	notPermitted = permission(0)
+	delegated    = permission(1)
+	permitted    = permission(2)
+)
+
 type grantNode struct {
 	grants   []*Grant
 	children map[string]*grantNode
@@ -71,13 +79,30 @@ func isSubName(name, sub string) bool {
 	return false
 }
 
+func getScope(scope string, scopes []string) permission {
+	delegation := "delegate_" + scope
+	var isPermitted bool
+	for _, s := range scopes {
+		if s == "delegate" || s == delegation {
+			return delegated
+		}
+		if s == "any" || s == scope {
+			isPermitted = true
+		}
+	}
+	if isPermitted {
+		return permitted
+	}
+	return notPermitted
+}
+
 type walkFunc func(*Grant, []*Grant) bool
 
 func foundWalkFunc(*Grant, []*Grant) bool {
 	return true
 }
 
-func (g *memoryGraph) walkGrants(start, target string, permission uint16, f walkFunc, chain []*Grant, visited map[*Grant]bool, collect bool) bool {
+func (g *memoryGraph) walkGrants(start, target string, scope string, f walkFunc, chain []*Grant, visited map[*Grant]bool, collect bool) bool {
 	if visited == nil {
 		visited = map[*Grant]bool{}
 	}
@@ -88,7 +113,15 @@ func (g *memoryGraph) walkGrants(start, target string, permission uint16, f walk
 			continue
 		}
 		visited[grant] = true
-		if grant.Permission&permission == permission {
+		permissionScope := getScope(scope, grant.Scopes)
+		if permissionScope == permitted {
+			// TODO replace isSubName with isChild
+			if isSubName(target, grant.Subject) {
+				if f(grant, chain) {
+					return true
+				}
+			}
+		} else if permissionScope == delegated {
 			if isSubName(target, grant.Subject) {
 				if f(grant, chain) {
 					return true
@@ -108,18 +141,18 @@ func (g *memoryGraph) walkGrants(start, target string, permission uint16, f walk
 			chainCopy = nil
 		}
 
-		if g.walkGrants(grant.Subject, target, permission, f, chainCopy, visited, collect) {
+		if g.walkGrants(grant.Subject, target, scope, f, chainCopy, visited, collect) {
 			return true
 		}
 	}
 	return false
 }
 
-func (g *memoryGraph) Verify(key libtrust.PublicKey, node string, permission uint16) (bool, error) {
-	return g.walkGrants(key.KeyID(), node, permission, foundWalkFunc, nil, nil, false), nil
+func (g *memoryGraph) Verify(key libtrust.PublicKey, node string, scope string) (bool, error) {
+	return g.walkGrants(key.KeyID(), node, scope, foundWalkFunc, nil, nil, false), nil
 }
 
-func (g *memoryGraph) GetGrants(key libtrust.PublicKey, node string, permission uint16) ([][]*Grant, error) {
+func (g *memoryGraph) GetGrants(key libtrust.PublicKey, node string, scope string) ([][]*Grant, error) {
 	grants := [][]*Grant{}
 	collect := func(grant *Grant, chain []*Grant) bool {
 		grantChain := make([]*Grant, len(chain)+1)
@@ -128,6 +161,6 @@ func (g *memoryGraph) GetGrants(key libtrust.PublicKey, node string, permission 
 		grants = append(grants, grantChain)
 		return false
 	}
-	g.walkGrants(key.KeyID(), node, permission, collect, nil, nil, true)
+	g.walkGrants(key.KeyID(), node, scope, collect, nil, nil, true)
 	return grants, nil
 }
